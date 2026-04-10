@@ -1,213 +1,138 @@
-# WetCH4-WS — RNA (Runtime Nucleic Acid)
+# WetCH4-WS — RNA
 
-**Версия:** 1.0
+**Версия:** 2.0
 **Дата:** 2026-04-10
-**Родительский документ:** DNA.md v1.0
-
----
-
-## Назначение
-
-RNA переводит инварианты DNA в конкретные проверяемые правила для стека проекта (GEE JavaScript, Python, GitHub). Каждый раздел RNA ссылается на раздел DNA, который он enforce-ит.
+**Родительский документ:** DNA.md v2.1
 
 ---
 
 ## 1. Enforcement инвариантов
 
-### DNA §3.1 → «Только аномалии, не абсолютные концентрации»
+### DNA §3.1 → TROPOMI — центральный инструмент
 
-**Проверка в коде:**
-```javascript
-// 02_tropomi_anomaly.js ОБЯЗАН содержать вычитание фона.
-// Выходной band называется 'delta_ch4', НЕ 'xch4' и НЕ 'ch4'.
-// Если в любом модуле используется band 'CH4_column_volume_mixing_ratio_dry_air'
-// напрямую для анализа (не для вычисления аномалии) — это нарушение.
+**Порядок модулей строгий:**
+```
+02_tropomi_monthly.js → работает без Модуля 1 (первый запуск)
+01_wetland_mask.js    → работает независимо
+03_enhancement.js     → требует Модули 1 + 2
+04_three_variables.js → требует Модуль 3 + ERA5 + MODIS
+05_validation.js      → требует Модуль 4 + наземные данные
+06_emission_estimate.js → требует Модуль 5
+07_app.js             → потребляет всё
 ```
 
 **Тест:**
 ```
-ASSERT: Модуль 2 выход содержит band 'delta_ch4'
-ASSERT: Модуль 2 выход НЕ содержит band с raw XCH₄
-ASSERT: Модуль 3 принимает 'delta_ch4', не raw XCH₄
-ASSERT: Модуль 4 визуализирует 'delta_ch4' или 'emission_proxy', не raw XCH₄
+ASSERT: 02_tropomi_monthly.js запускается без wetland_mask
+ASSERT: 03_enhancement.js выбрасывает ошибку без wetland_mask
+ASSERT: Ни один модуль не вызывает модуль с бо́льшим номером
 ```
-
-**Чеклист при code review:**
-- [ ] В 02_tropomi_anomaly.js есть строка вычисления background
-- [ ] background вычисляется с маской болот (wetland_mask == 0)
-- [ ] Выходной band назван 'delta_ch4'
 
 ---
 
-### DNA §3.2 → «Карта болот первична»
-
-**Проверка в коде:**
-```javascript
-// 03_emission_proxy.js ОБЯЗАН использовать wetland_mask как предиктор.
-// 02_tropomi_anomaly.js ОБЯЗАН использовать wetland_mask для вычисления фона.
-// Модуль 3 НЕ запускается без готового Модуля 1.
-```
-
-**Тест:**
-```
-ASSERT: 03_emission_proxy.js импортирует wetland_mask
-ASSERT: 02_tropomi_anomaly.js импортирует wetland_mask для background calculation
-ASSERT: Если wetland_mask === null → throw Error('Wetland mask required')
-```
-
-**Порядок запуска модулей:**
-```
-1 (wetland_mask) → 2 (tropomi_anomaly, использует маску для фона) → 3 (emission_proxy) → 4 (app)
-```
-Нарушение порядка = нарушение DNA.
-
----
-
-### DNA §3.3 → «Калибровка только по опубликованным данным»
+### DNA §3.2 → Карта болот первична для атрибуции
 
 **Проверка:**
 ```
-ASSERT: Каждая запись в calibration_all.csv имеет поле 'source' (DOI или ссылка)
-ASSERT: calibration/README.md содержит полную библиографию источников
-ASSERT: Неопубликованные данные помечены флагом 'unpublished' + имя PI + дата согласия
+ASSERT: 03_enhancement.js использует wetland_mask для разделения болота/леса
+ASSERT: background вычисляется по пикселям wetland_type == 0
+ASSERT: Агрегация XCH₄ проводится отдельно для wetland_type > 0 и wetland_type == 0
+```
+
+**Чеклист:**
+- [ ] Фон = median XCH₄ по не-болотным пикселям (wetland_type == 0)
+- [ ] Enhancement = XCH₄_wetland − XCH₄_forest
+- [ ] Boxplot XCH₄ строится отдельно для каждого wetland_type
+
+---
+
+### DNA §3.3 → Наземные данные для валидации
+
+**Проверка:**
+```
+ASSERT: Модули 02–04 НЕ используют наземные данные
+ASSERT: Наземные данные появляются только в Модуле 05 (validation)
+ASSERT: Модуль 06 использует наземные для transfer function, НЕ для обучения TROPOMI
 ```
 
 **Файловая структура:**
 ```
 calibration/
-├── README.md              # ОБЯЗАТЕЛЬНО: источники, лицензии, цитирование
-├── mukhrino_ch4.csv       # source = Dyukarev et al. 2024
-├── sabrekov_bc8.csv       # source = Sabrekov et al. 2011, 2013
-├── bakchar_ch4.csv        # source = Veretennikova & Dyukarev 2021
-└── calibration_all.csv    # объединённый, каждая строка с source
+├── README.md              # ОБЯЗАТЕЛЬНО: DOI, лицензии
+├── mukhrino_ch4.csv       # Dyukarev et al. 2024
+├── sabrekov_bc8.csv       # Sabrekov et al. 2011, 2013
+├── bakchar_ch4.csv        # Veretennikova & Dyukarev 2021
+└── calibration_all.csv    # Каждая строка с полем 'source'
 ```
-
-**Запрещено:**
-- Данные без указания источника
-- Данные с устного согласия без фиксации в README
 
 ---
 
-### DNA §3.4 → «Честность относительно ограничений»
+### DNA §3.5 → Честность
 
-**Проверка в GEE App (Модуль 4):**
-```javascript
-// 04_app.js ОБЯЗАН содержать панель 'Limitations' или disclaimer.
-// Текст disclaimer включает ВСЕ 4 пункта из DNA §3.4.
+**GEE App (Модуль 7) обязан содержать disclaimer:**
 ```
-
-**Текст для App:**
-```
-DISCLAIMER:
 • TROPOMI measures column-averaged CH₄, not surface flux
-• Winter months (Nov–Apr) are excluded due to snow/cloud cover
-• Calibration is based on a single station (Mukhrino, 60.9°N)
-• TROPOMI pixel (~7 km) does not resolve individual microlandscapes
+• Winter (Nov–Apr) excluded
+• Relative contribution (wetland vs forest) is the primary product
+• Absolute emission estimates require ground-truth calibration
 ```
 
-**Проверка в статье:**
-- [ ] Раздел Discussion содержит подразделы по каждому из 4 ограничений
-- [ ] Abstract НЕ содержит overclaims
-
----
-
-### DNA §3.5 → «Открытость и воспроизводимость»
-
-**Проверка:**
+**Запрещённые формулировки (grep):**
 ```
-ASSERT: Репозиторий GitHub — public
-ASSERT: Все GEE скрипты — в репо (не только в GEE Code Editor)
-ASSERT: GEE App URL указан в статье и README
-ASSERT: calibration/ данные либо в репо, либо ссылка на Zenodo/DOI
-ASSERT: README.md в корне содержит инструкцию воспроизведения (< 10 шагов)
-```
-
-**Шаблон README инструкции:**
-```markdown
-## Reproduction
-1. Clone this repository
-2. Open `gee/02_tropomi_anomaly.js` in GEE Code Editor
-3. Import Geometry from `assets/aoi.geojson`
-4. Run → monthly ΔCH₄ maps appear on the map
-5. For emission proxy: first run `gee/01_wetland_mask.js`, then `gee/03_emission_proxy.js`
-6. For the App: open [URL]
-```
-
----
-
-### DNA §3.6 → «Никаких заявлений о верификации кадастров»
-
-**Запрещённые формулировки** (grep по всем .js, .md, .py):
-```
-FORBIDDEN: "verify national inventory"
-FORBIDDEN: "validate UNFCCC"
+FORBIDDEN: "verify national inventory" / "верификация кадастра"
 FORBIDDEN: "Paris Agreement compliance"
 FORBIDDEN: "official emission reporting"
-FORBIDDEN: "верификация кадастра"
-FORBIDDEN: "проверка отчётности"
-```
-
-**Допустимые формулировки:**
-```
-OK: "research tool for regional CH₄ monitoring"
-OK: "independent estimate for model benchmarking"
-OK: "complements existing bottom-up inventories"
 ```
 
 ---
 
-## 2. Контракты данных (enforcement)
+## 2. Контракты данных
 
-### Модуль 1 → Модуль 2, 3, 4
+### Модуль 2 → Модуль 3
 
 ```javascript
-// wetland_mask: ee.Image
-// Bands: ['wetland_type']
-// Type: int8
-// Values: 0–8 (see CLAUDE.md WETLAND_CLASSES)
-// CRS: EPSG:4326
-// Scale: 10 m (Sentinel-2 native)
-
-// ТЕСТ: var types = wetland_mask.reduceRegion({
-//   reducer: ee.Reducer.frequencyHistogram(),
-//   geometry: TEST_AOI, scale: 10, maxPixels: 1e9
-// });
-// ASSERT: все ключи гистограммы ∈ {0,1,2,3,4,5,6,7,8}
-// ASSERT: ключ 0 (non-wetland) > 30% территории
+// ee.ImageCollection: месячные композиты XCH₄
+// Band: 'xch4' (float, ppb)
+// Properties: 'year' (int), 'month' (int 5–10), 'n_obs' (int)
+//
+// ТЕСТ:
+// var img = collection.first();
+// assert(img.bandNames().contains('xch4'));
+// assert(img.getNumber('month').gte(5).and(img.getNumber('month').lte(10)));
+// assert(img.getNumber('n_obs').gt(0));
 ```
 
-### Модуль 2 → Модуль 3, 4
+### Модуль 1 → Модуль 3
 
 ```javascript
-// delta_ch4: ee.ImageCollection
-// Bands per image: ['delta_ch4']
-// Type: float
-// Units: ppb
-// Properties: 'year' (int), 'month' (int), 'n_observations' (int)
-// CRS: EPSG:4326
-// Temporal: monthly composites, May–October only
-
-// ТЕСТ: var img = delta_ch4.first();
-// ASSERT: img.bandNames().getInfo() содержит 'delta_ch4'
-// ASSERT: img.get('year').getInfo() >= 2019
-// ASSERT: img.get('month').getInfo() >= 5 && <= 10
-// ASSERT: img.get('n_observations').getInfo() > 0
+// ee.Image: wetland_type
+// Band: 'wetland_type' (int8, 0–8)
+//
+// ТЕСТ: гистограмма значений ∈ {0,1,2,3,4,5,6,7,8}
+// ТЕСТ: wetland_type == 0 покрывает > 30% AOI
 ```
 
 ### Модуль 3 → Модуль 4
 
 ```javascript
-// emission_proxy: ee.Image
-// Bands: ['emission_proxy', 'uncertainty']
-// Type: float
-// Units: mgC·m⁻²·h⁻¹
-// CRS: EPSG:4326
+// ee.ImageCollection: enhancement
+// Bands: 'xch4', 'delta_ch4' (float, ppb)
+// Properties: year, month
+// + ee.FeatureCollection: таблица year, month, xch4_wetland, xch4_forest, delta_ch4
+//
+// ТЕСТ: delta_ch4 = xch4_wetland - xch4_forest
+// ТЕСТ: delta_ch4 > 0 для летних месяцев (если нет — kill signal)
+```
 
-// ТЕСТ: var stats = emission_proxy.reduceRegion({
-//   reducer: ee.Reducer.minMax(), geometry: TEST_AOI, scale: 5000
-// });
-// ASSERT: emission_proxy_min >= -1 (небольшой отрицательный — допустим)
-// ASSERT: emission_proxy_max <= 50 (если больше — выброс)
+### Модуль 4 → Модуль 5
+
+```javascript
+// ee.ImageCollection с bands: 'xch4', 'delta_ch4', 't_air', 'ndvi'
+// Properties: year, month
+//
+// ТЕСТ: все 4 bands присутствуют
+// ТЕСТ: t_air в диапазоне -5…+30 °C для мая–октября
+// ТЕСТ: ndvi в диапазоне 0…0.9
 ```
 
 ---
@@ -216,77 +141,55 @@ OK: "complements existing bottom-up inventories"
 
 ### Перед коммитом
 
-- [ ] Smoke test на TEST_AOI пройден (без ошибок GEE)
-- [ ] Выходные bands соответствуют контракту (имя, тип, единицы)
-- [ ] Нет `.getInfo()` в коде App (блокирует UI)
-- [ ] Нет magic numbers (все пороги в constants.js)
-- [ ] JSDoc на каждой функции
-- [ ] Нет нарушений запрещённых формулировок (§3.6)
+- [ ] Smoke test на TEST_AOI (Мухрино 100×100 км), один месяц, без ошибок
+- [ ] Bands соответствуют контракту
+- [ ] Нет `.getInfo()` в App-коде
+- [ ] Нет magic numbers
+- [ ] JSDoc на функциях
 
-### Перед публикацией GEE App
+### Kill signal (Фаза 1C)
 
-- [ ] Disclaimer panel присутствует (§3.4)
-- [ ] Все слои загружаются < 10 сек
-- [ ] Экспорт работает (CSV и GeoTIFF)
-- [ ] URL работает без аккаунта GEE (public app)
-- [ ] Версия и дата указаны в App
+Если после интеграции Модулей 1+2:
+- [ ] XCH₄_wetland − XCH₄_forest ≤ 0 ppb для июля → **метод не работает, остановить проект**
+- [ ] Разница < 5 ppb → метод на грани, нужен анализ причин
+- [ ] Разница > 10 ppb → метод работает, продолжать
 
 ### Перед подачей статьи
 
-- [ ] Все фигуры воспроизводимы из скриптов в репо
-- [ ] calibration/README.md содержит все DOI
-- [ ] GitHub repo — public
-- [ ] GEE App URL — в Data Availability Statement
-- [ ] Ни одна формулировка не нарушает §3.6
-- [ ] Все 4 ограничения из §3.4 упомянуты в Discussion
-- [ ] Code Availability Statement содержит URL репо
+- [ ] GitHub repo public
+- [ ] GEE App URL в Data Availability
+- [ ] calibration/README.md с DOI
+- [ ] Все ограничения в Discussion
+- [ ] Нет overclaims
 
 ---
 
-## 4. CI-подобные проверки (ручные, до автоматизации)
+## 4. Ручной CI-протокол
 
-GEE не имеет CI в классическом смысле. Заменяем ручным протоколом:
-
-### После каждого изменения модуля:
-
-```
-1. Открыть изменённый .js в GEE Code Editor
+### После изменения модуля:
+1. Открыть .js в GEE Code Editor
 2. Run на TEST_AOI
-3. Проверить консоль: нет ошибок, цифры в ожидаемом диапазоне
-4. Проверить карту: визуально осмысленная
-5. Если модуль 2 или 3 — проверить, что контракт данных не изменился
-6. Записать результат в ROADMAP (задача → ✅)
-```
+3. Консоль: нет ошибок, цифры в диапазоне
+4. Карта: визуально осмысленная
+5. Контракт данных не изменился
 
-### Интеграционный тест (после изменения любого модуля):
-
-```
-1. Запустить модули последовательно: 1 → 2 → 3 → 4
-2. На TEST_AOI, один месяц (июль 2023)
-3. App должен показать:
-   - Карту болот (9 цветов)
-   - Карту ΔCH₄ (синий-белый-красный)
-   - Boxplot ΔCH₄ по типам
-4. Время полной загрузки < 30 сек
-```
+### Интеграционный тест:
+1. Модули 1 → 2 → 3 последовательно, TEST_AOI, июль 2023
+2. Результат: таблица с xch4_wetland, xch4_forest, delta_ch4
+3. delta_ch4 > 0 → OK
 
 ---
 
-## 5. Связь документов
+## 5. Иерархия документов
 
 ```
-DNA.md (инварианты, для человека)
-  ↓
-RNA.md (enforcement, для агента и разработчика) ← ВЫ ЗДЕСЬ
-  ├── CLAUDE.md (контракт с Claude Code)
-  ├── Чеклисты (ручные CI)
-  └── Контракты данных (схемы между модулями)
-  ↓
-PROJECT_CARD.md (состояние проекта)
-ROADMAP.md (план)
-DevPrompt_NN.md (задачи для Claude Code)
-  ↓
-gee/*.js (код)
+DNA.md           — инварианты (для человека)
+RNA.md           — enforcement (для агента и разработчика) ← ВЫ ЗДЕСЬ
+CLAUDE.md        — правила кодирования (для Claude Code)
+PROJECT_CARD.md  — состояние проекта
+ROADMAP.md       — план и хронология
+DevPrompt_NN.md  — задачи для Claude Code
+gee/*.js         — код
 ```
 
 ---
@@ -296,3 +199,4 @@ gee/*.js (код)
 | Версия | Дата | Изменения |
 |--------|------|-----------|
 | 1.0 | 2026-04-10 | Первичная формализация |
+| 2.0 | 2026-04-10 | Перестройка под 7-модульную архитектуру. Kill signal. Упрощение контрактов. |

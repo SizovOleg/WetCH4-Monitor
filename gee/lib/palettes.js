@@ -68,10 +68,21 @@ var NDVI_PALETTE = [
 ];
 
 // ============================================================
+// XCH4 absolute (sequential)
+// ============================================================
+
+/**
+ * Blue–cyan–green–yellow–red sequential palette for XCH4 (ppb).
+ * Typical range: 1870–1920 ppb.
+ */
+var XCH4_PALETTE = ['blue', 'cyan', 'green', 'yellow', 'red'];
+
+// ============================================================
 // Exports
 // ============================================================
 
 exports.WETLAND_PALETTE = WETLAND_PALETTE;
+exports.XCH4_PALETTE = XCH4_PALETTE;
 exports.DELTA_CH4_PALETTE = DELTA_CH4_PALETTE;
 exports.EMISSION_PALETTE = EMISSION_PALETTE;
 exports.NDVI_PALETTE = NDVI_PALETTE;
