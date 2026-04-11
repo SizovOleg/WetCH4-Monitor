@@ -218,6 +218,155 @@ var chartWetFor = ui.Chart.feature.byFeature(table, 'month',
   });
 print(chartWetFor);
 
+// ============================================================
+// AGGREGATION: Seasonal cycle (6 points) + Interannual (7 points)
+// ============================================================
+
+var months = ee.List(c.SUMMER_MONTHS);
+var years = ee.List.sequence(2019, 2025);
+
+// --- Сезонный ход: среднее по годам для каждого месяца ---
+var seasonalMean = ee.FeatureCollection(months.map(function(m) {
+  var subset = table.filter(ee.Filter.eq('month', m));
+  return ee.Feature(null, {
+    'month': m,
+    'delta_ch4': subset.aggregate_mean('delta_ch4'),
+    'delta_ch4_std': subset.aggregate_total_sd('delta_ch4'),
+    'xch4_wetland': subset.aggregate_mean('xch4_wetland'),
+    'xch4_forest': subset.aggregate_mean('xch4_forest'),
+    't_air_wetland': subset.aggregate_mean('t_air_wetland'),
+    't_air_forest': subset.aggregate_mean('t_air_forest'),
+    'ndvi_wetland': subset.aggregate_mean('ndvi_wetland'),
+    'ndvi_forest': subset.aggregate_mean('ndvi_forest'),
+    'n_years': subset.size()
+  });
+}));
+
+print('═══ SEASONAL CYCLE (mean across years) ═══');
+print(seasonalMean);
+
+// --- Межгодовой тренд: среднее по месяцам для каждого года ---
+var annualMean = ee.FeatureCollection(years.map(function(y) {
+  var subset = table.filter(ee.Filter.eq('year', y));
+  return ee.Feature(null, {
+    'year': y,
+    'delta_ch4': subset.aggregate_mean('delta_ch4'),
+    'delta_ch4_std': subset.aggregate_total_sd('delta_ch4'),
+    'xch4_wetland': subset.aggregate_mean('xch4_wetland'),
+    'xch4_forest': subset.aggregate_mean('xch4_forest'),
+    't_air_wetland': subset.aggregate_mean('t_air_wetland'),
+    'ndvi_wetland': subset.aggregate_mean('ndvi_wetland'),
+    'n_months': subset.size()
+  });
+}));
+
+print('═══ INTERANNUAL TREND (mean across months) ═══');
+print(annualMean);
+
+// --- Графики: сезонный ход ---
+
+var chartSeasonalDelta = ui.Chart.feature.byFeature(seasonalMean, 'month', 'delta_ch4')
+  .setChartType('ColumnChart')
+  .setOptions({
+    title: 'Seasonal ΔCH₄ (mean 2019–2025)',
+    hAxis: {title: 'Month', ticks: [5,6,7,8,9,10]},
+    vAxis: {title: 'ΔCH₄ (ppb)'},
+    legend: 'none',
+    colors: ['#1f77b4']
+  });
+print(chartSeasonalDelta);
+
+var chartSeasonalAll = ui.Chart.feature.byFeature(seasonalMean, 'month',
+    ['delta_ch4', 't_air_wetland', 'ndvi_wetland'])
+  .setChartType('LineChart')
+  .setOptions({
+    title: 'Seasonal cycle: ΔCH₄, T_air, NDVI (wetlands, mean 2019–2025)',
+    hAxis: {title: 'Month', ticks: [5,6,7,8,9,10]},
+    series: {
+      0: {targetAxisIndex: 0, color: 'blue', labelInLegend: 'ΔCH₄ (ppb)'},
+      1: {targetAxisIndex: 1, color: 'red', labelInLegend: 'T_air (°C)'},
+      2: {targetAxisIndex: 1, color: 'green', labelInLegend: 'NDVI'}
+    },
+    vAxes: {
+      0: {title: 'ΔCH₄ (ppb)'},
+      1: {title: 'T_air (°C) / NDVI'}
+    },
+    pointSize: 6, lineWidth: 2
+  });
+print(chartSeasonalAll);
+
+var chartSeasonalWetFor = ui.Chart.feature.byFeature(seasonalMean, 'month',
+    ['xch4_wetland', 'xch4_forest'])
+  .setChartType('LineChart')
+  .setOptions({
+    title: 'Seasonal XCH₄: Wetlands vs Forests (mean 2019–2025)',
+    hAxis: {title: 'Month', ticks: [5,6,7,8,9,10]},
+    vAxis: {title: 'XCH₄ (ppb)'},
+    series: {
+      0: {color: 'cyan', labelInLegend: 'Wetlands'},
+      1: {color: 'darkgreen', labelInLegend: 'Forests'}
+    },
+    pointSize: 6, lineWidth: 2
+  });
+print(chartSeasonalWetFor);
+
+// --- Графики: межгодовой ---
+
+var chartAnnualDelta = ui.Chart.feature.byFeature(annualMean, 'year', 'delta_ch4')
+  .setChartType('ColumnChart')
+  .setOptions({
+    title: 'Annual mean ΔCH₄ (2019–2025)',
+    hAxis: {title: 'Year'},
+    vAxis: {title: 'ΔCH₄ (ppb)'},
+    legend: 'none',
+    colors: ['#1f77b4'],
+    trendlines: {0: {color: 'red', showR2: true, visibleInLegend: true}}
+  });
+print(chartAnnualDelta);
+
+var chartAnnualAll = ui.Chart.feature.byFeature(annualMean, 'year',
+    ['xch4_wetland', 'xch4_forest', 't_air_wetland'])
+  .setChartType('LineChart')
+  .setOptions({
+    title: 'Interannual: XCH₄ and T_air (2019–2025)',
+    hAxis: {title: 'Year'},
+    series: {
+      0: {targetAxisIndex: 0, color: 'cyan', labelInLegend: 'XCH₄ wetland'},
+      1: {targetAxisIndex: 0, color: 'darkgreen', labelInLegend: 'XCH₄ forest'},
+      2: {targetAxisIndex: 1, color: 'red', labelInLegend: 'T_air (°C)'}
+    },
+    vAxes: {
+      0: {title: 'XCH₄ (ppb)'},
+      1: {title: 'T_air (°C)'}
+    },
+    pointSize: 6, lineWidth: 2
+  });
+print(chartAnnualAll);
+
+// --- Scatter: агрегированные ---
+
+var chartDeltaTempSeasonal = ui.Chart.feature.byFeature(seasonalMean, 't_air_wetland', 'delta_ch4')
+  .setChartType('ScatterChart')
+  .setOptions({
+    title: 'ΔCH₄ vs T_air — seasonal cycle (6 months)',
+    hAxis: {title: 'T_air (°C)'},
+    vAxis: {title: 'ΔCH₄ (ppb)'},
+    pointSize: 8,
+    trendlines: {0: {color: 'red', showR2: true}}
+  });
+print(chartDeltaTempSeasonal);
+
+var chartDeltaTempAnnual = ui.Chart.feature.byFeature(annualMean, 't_air_wetland', 'delta_ch4')
+  .setChartType('ScatterChart')
+  .setOptions({
+    title: 'ΔCH₄ vs T_air — interannual (7 years)',
+    hAxis: {title: 'T_air (°C)'},
+    vAxis: {title: 'ΔCH₄ (ppb)'},
+    pointSize: 8,
+    trendlines: {0: {color: 'red', showR2: true}}
+  });
+print(chartDeltaTempAnnual);
+
 // --- Сводка ---
 print('═══ THREE VARIABLES SUMMARY ═══');
 print('Mean ΔCH₄:', table.aggregate_mean('delta_ch4'), 'ppb');
@@ -230,5 +379,15 @@ print('Mean NDVI forest:', table.aggregate_mean('ndvi_forest'));
 Export.table.toDrive({
   collection: table,
   description: 'wetch4_three_variables',
+  fileFormat: 'CSV'
+});
+Export.table.toDrive({
+  collection: seasonalMean,
+  description: 'wetch4_seasonal_mean',
+  fileFormat: 'CSV'
+});
+Export.table.toDrive({
+  collection: annualMean,
+  description: 'wetch4_annual_mean',
   fileFormat: 'CSV'
 });
