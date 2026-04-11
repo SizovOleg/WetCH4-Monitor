@@ -77,6 +77,21 @@ var WETLAND_CLASSES = {
 var N_WETLAND_TYPES = 8;
 
 // ============================================================
+// CGLS Land Cover parameters
+// ============================================================
+
+/** Copernicus Global Land Cover 100m, 2019 */
+var CGLS_COLLECTION = 'COPERNICUS/Landcover/100m/Proba-V-C3/Global/2019';
+
+/** Simplified landcover classes for kill-or-go analysis */
+var LANDCOVER_CLASSES = {
+  0: 'other',
+  1: 'wetland',
+  2: 'forest',
+  3: 'water'
+};
+
+// ============================================================
 // Visualization defaults
 // ============================================================
 
@@ -109,3 +124,5 @@ exports.CLOUD_THRESHOLD = CLOUD_THRESHOLD;
 exports.WETLAND_CLASSES = WETLAND_CLASSES;
 exports.N_WETLAND_TYPES = N_WETLAND_TYPES;
 exports.XCH4_VIS = XCH4_VIS;
+exports.CGLS_COLLECTION = CGLS_COLLECTION;
+exports.LANDCOVER_CLASSES = LANDCOVER_CLASSES;

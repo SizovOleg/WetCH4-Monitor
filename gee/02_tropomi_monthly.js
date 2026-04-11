@@ -29,9 +29,9 @@
 // Imports
 // ============================================================
 
-var c = require('users/YOUR_USERNAME/wetch4-ws:gee/lib/constants');
-var utils = require('users/YOUR_USERNAME/wetch4-ws:gee/lib/utils');
-var palettes = require('users/YOUR_USERNAME/wetch4-ws:gee/lib/palettes');
+var c = require('users/ntcomz18_sand/wetch4_ws:gee/lib/constants');
+var utils = require('users/ntcomz18_sand/wetch4_ws:gee/lib/utils');
+var palettes = require('users/ntcomz18_sand/wetch4_ws:gee/lib/palettes');
 
 // ============================================================
 // Core functions
@@ -45,16 +45,14 @@ var palettes = require('users/YOUR_USERNAME/wetch4-ws:gee/lib/palettes');
  * @return {ee.ImageCollection} Filtered collection, single band renamed 'xch4'.
  */
 function loadTropomi(aoi, startDate, endDate) {
+  // L3 product is already QA-filtered at production level — no validity band.
   return ee.ImageCollection(c.TROPOMI_COLLECTION)
     .filterBounds(aoi)
     .filterDate(startDate, endDate)
     .map(function(image) {
-      var qa = image.select(c.QA_BAND);
-      var qaMask = qa.gt(c.QA_THRESHOLD);
       return image
         .select(c.CH4_BAND)
         .rename('xch4')
-        .updateMask(qaMask)
         .copyProperties(image, ['system:time_start']);
     });
 }

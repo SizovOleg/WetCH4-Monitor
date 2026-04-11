@@ -78,6 +78,23 @@ var NDVI_PALETTE = [
 var XCH4_PALETTE = ['blue', 'cyan', 'green', 'yellow', 'red'];
 
 // ============================================================
+// Simplified landcover (4 classes)
+// ============================================================
+
+/**
+ * 4-color palette for simplified landcover mask.
+ *   0 = other (gray), 1 = wetland (cyan),
+ *   2 = forest (dark green), 3 = water (blue)
+ */
+var LANDCOVER_PALETTE = ['#bdbdbd', '#00bcd4', '#2e7d32', '#1565c0'];
+
+/** Wetland fraction visualization (0–100%) */
+var WETLAND_FRAC_VIS = {
+  min: 0, max: 100,
+  palette: ['white', 'cyan', 'blue']
+};
+
+// ============================================================
 // Exports
 // ============================================================
 
@@ -86,3 +103,5 @@ exports.XCH4_PALETTE = XCH4_PALETTE;
 exports.DELTA_CH4_PALETTE = DELTA_CH4_PALETTE;
 exports.EMISSION_PALETTE = EMISSION_PALETTE;
 exports.NDVI_PALETTE = NDVI_PALETTE;
+exports.LANDCOVER_PALETTE = LANDCOVER_PALETTE;
+exports.WETLAND_FRAC_VIS = WETLAND_FRAC_VIS;
