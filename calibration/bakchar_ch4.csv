@@ -1,0 +1,3 @@
+site,lat,lon,type,month,year,ch4_flux,ch4_unit,ch4_flux_mgCH4_m2_h,method,source_doi,table_or_figure,notes
+bakchar,56.93,82.67,open_bog,,2016-2018,2.66,mgCH4_m2_h,2.66,chamber,10.5281/zenodo.4718848,abstract + text,mean+-4.58 sd; warm season; July max; BER 26:43-59
+bakchar,56.93,82.67,forested_bog,,2016-2018,0.57,mgCH4_m2_h,0.57,chamber,10.5281/zenodo.4718848,abstract + text,mean+-0.69 sd; warm season; open/forested ratio=4.7x; BER 26:43-59

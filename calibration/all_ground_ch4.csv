@@ -1,0 +1,13 @@
+site,lat,lon,type,month,year,ch4_flux,ch4_unit,ch4_flux_mgCH4_m2_h,method,source_doi,table_or_figure,notes
+mukhrino,60.892,68.682,hollow,6,2023,2.76,mgCH4_m2_h,2.76,chamber,edgccjournal.org/EDGCC/article/view/636456,Table 1,median; auto-chambers 1-4; 28 May - 3 Jun 2023; range 1.20-6.42
+mukhrino,60.892,68.682,ridge,6,2023,0.08,mgCH4_m2_h,0.08,chamber,edgccjournal.org/EDGCC/article/view/636456,Table 1,median; auto-chambers 5-8; 28 May - 3 Jun 2023; range -0.06-0.73
+mukhrino,60.892,68.682,hollow,6,2022,6.0,mgCH4_m2_h,6.0,chamber,10.3390/f15010102,Fig. 12 + text p.15,median; static chambers at RH site; Jun 2022
+mukhrino,60.892,68.682,waterlogged_hollow,6,2022,11.0,mgCH4_m2_h,11.0,chamber,10.3390/f15010102,Fig. 12 + text p.15,median; static chambers at WH site; Jun 2022
+mukhrino,60.892,68.682,ridge,6,2022,0.0,mgCH4_m2_h,0.0,chamber,10.3390/f15010102,Fig. 12 + text p.15,near-zero; WTL ~40 cm below surface; Jun 2022
+mukhrino,60.892,68.682,hollow,8,2020,4.35,mgCH4_m2_h,4.35,chamber,10.3390/f15010102,text p.15 ref[25],midpoint 3.7-5.0; Aug-Sep 2020
+mukhrino,60.892,68.682,mixed,6,2022,0.045,umol_m2_s,2.59,eddy_covariance,10.3390/f15010102,text p.19,EC daytime avg; WH+RH towers; Jun 16-18 2022
+mukhrino,60.892,68.682,mixed,6,2022,0.045,umol_m2_s,2.59,abl_budget,10.3390/f15010102,text p.19,ABL budget nighttime; profile inversion; Jun 16-18 2022
+bakchar,56.93,82.67,open_bog,,2016-2018,2.66,mgCH4_m2_h,2.66,chamber,10.5281/zenodo.4718848,abstract + text,mean+-4.58 sd; warm season; July max; BER 26:43-59
+bakchar,56.93,82.67,forested_bog,,2016-2018,0.57,mgCH4_m2_h,0.57,chamber,10.5281/zenodo.4718848,abstract + text,mean+-0.69 sd; warm season; open/forested ratio=4.7x; BER 26:43-59
+zotto,60.80,89.35,mixed,6-9,2009,5.6,nmol_m2_s,0.32,profile_inversion,10.5194/bg-11-2055-2014,abstract + text,nighttime flux; 5.6+-4.5 nmol/m2/s; Jun-Sep 2009 and 2011; modified Bowen ratio
+zotto,60.80,89.35,mixed,,2010-2021,,ppb_yr,,tower_concentration,10.5194/acp-25-16553-2025,text,CH4 growth rate 9.85+-7.1 ppb/yr; ZOTTO ~50 ppb above MBL; late-summer amplitude trend 1.35 ppb/yr

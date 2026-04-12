@@ -1,0 +1,9 @@
+zone,type,ch4_flux_median_mgC,ch4_flux_q1_mgC,ch4_flux_q3_mgC,ch4_flux_median_mgCH4,unit_original,source
+middle_taiga,olig_hollows,2.76,1.15,6.21,3.68,mgC_m2_h,Sabrekov2011
+middle_taiga,ridges,0.09,0.00,0.37,0.12,mgC_m2_h,Sabrekov2011
+middle_taiga,ryams,0.04,0.00,0.28,0.05,mgC_m2_h,Sabrekov2011
+middle_taiga,peat_mats,4.65,2.74,6.11,6.20,mgC_m2_h,Sabrekov2011
+middle_taiga,ponds,17.50,,,23.33,mgC_m2_h,Sabrekov2011
+north_taiga,olig_hollows,1.89,0.72,4.02,2.52,mgC_m2_h,Sabrekov2013
+north_taiga,meso_hollows,3.51,1.44,7.85,4.68,mgC_m2_h,Sabrekov2013
+north_taiga,ridges,0.06,0.00,0.21,0.08,mgC_m2_h,Sabrekov2013

@@ -17,6 +17,12 @@ var TEST_AOI = ee.Geometry.Rectangle([68.0, 60.5, 69.5, 61.3]);
 /** Mukhrino eddy-covariance tower location */
 var MUKHRINO = ee.Geometry.Point([68.682, 60.892]);
 
+/** Bakchar peatland station (southern taiga, Tomsk region) */
+var BAKCHAR = ee.Geometry.Point([82.67, 56.93]);
+
+/** ZOTTO tall tower observatory (60°48'N, 89°21'E) */
+var ZOTTO = ee.Geometry.Point([89.35, 60.80]);
+
 // ============================================================
 // Temporal parameters
 // ============================================================
@@ -109,6 +115,8 @@ var XCH4_VIS = {
 exports.FULL_AOI = FULL_AOI;
 exports.TEST_AOI = TEST_AOI;
 exports.MUKHRINO = MUKHRINO;
+exports.BAKCHAR = BAKCHAR;
+exports.ZOTTO = ZOTTO;
 exports.START_DATE = START_DATE;
 exports.END_DATE = END_DATE;
 exports.SUMMER_MONTHS = SUMMER_MONTHS;

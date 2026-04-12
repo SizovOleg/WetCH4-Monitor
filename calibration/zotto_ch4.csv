@@ -1,0 +1,3 @@
+site,lat,lon,type,month,year,ch4_flux,ch4_unit,ch4_flux_mgCH4_m2_h,method,source_doi,table_or_figure,notes
+zotto,60.80,89.35,mixed,6-9,2009,5.6,nmol_m2_s,0.32,profile_inversion,10.5194/bg-11-2055-2014,abstract + text,nighttime flux; 5.6+-4.5 nmol/m2/s; Jun-Sep 2009 and 2011; modified Bowen ratio
+zotto,60.80,89.35,mixed,,2010-2021,,ppb_yr,,tower_concentration,10.5194/acp-25-16553-2025,text,CH4 growth rate 9.85+-7.1 ppb/yr; ZOTTO ~50 ppb above MBL; late-summer amplitude trend 1.35 ppb/yr

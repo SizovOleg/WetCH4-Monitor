@@ -1,0 +1,9 @@
+site,lat,lon,type,month,year,ch4_flux,ch4_unit,ch4_flux_mgCH4_m2_h,method,source_doi,table_or_figure,notes
+mukhrino,60.892,68.682,hollow,6,2023,2.76,mgCH4_m2_h,2.76,chamber,edgccjournal.org/EDGCC/article/view/636456,Table 1,median; auto-chambers 1-4; 28 May - 3 Jun 2023; range 1.20-6.42
+mukhrino,60.892,68.682,ridge,6,2023,0.08,mgCH4_m2_h,0.08,chamber,edgccjournal.org/EDGCC/article/view/636456,Table 1,median; auto-chambers 5-8; 28 May - 3 Jun 2023; range -0.06-0.73
+mukhrino,60.892,68.682,hollow,6,2022,6.0,mgCH4_m2_h,6.0,chamber,10.3390/f15010102,Fig. 12 + text p.15,median; static chambers at RH site; Jun 2022
+mukhrino,60.892,68.682,waterlogged_hollow,6,2022,11.0,mgCH4_m2_h,11.0,chamber,10.3390/f15010102,Fig. 12 + text p.15,median; static chambers at WH site; Jun 2022
+mukhrino,60.892,68.682,ridge,6,2022,0.0,mgCH4_m2_h,0.0,chamber,10.3390/f15010102,Fig. 12 + text p.15,near-zero; WTL ~40 cm below surface; Jun 2022
+mukhrino,60.892,68.682,hollow,8,2020,4.35,mgCH4_m2_h,4.35,chamber,10.3390/f15010102,text p.15 ref[25],midpoint 3.7-5.0; Aug-Sep 2020
+mukhrino,60.892,68.682,mixed,6,2022,0.045,umol_m2_s,2.59,eddy_covariance,10.3390/f15010102,text p.19,EC daytime avg; WH+RH towers; Jun 16-18 2022
+mukhrino,60.892,68.682,mixed,6,2022,0.045,umol_m2_s,2.59,abl_budget,10.3390/f15010102,text p.19,ABL budget nighttime; profile inversion; Jun 16-18 2022
