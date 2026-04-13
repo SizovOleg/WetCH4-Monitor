@@ -115,8 +115,13 @@ exports.makeMonthlyComposite = makeMonthlyComposite;
 exports.buildMonthlyCollection = buildMonthlyCollection;
 
 // ============================================================
-// SMOKE TEST — Run in GEE Code Editor
+// SMOKE TEST — поставить true для запуска напрямую в Code Editor
+// При require() из другого модуля оставить false
 // ============================================================
+
+var _RUN_SMOKE_TEST = false;
+
+if (_RUN_SMOKE_TEST) {
 
 var monthlyCollection = buildMonthlyCollection(
   c.TEST_AOI, c.START_DATE, c.END_DATE
@@ -161,3 +166,5 @@ print(chart);
 // --- Collection metadata ---
 print('Collection size:', monthlyCollection.size());
 print('First image properties:', monthlyCollection.first().toDictionary());
+
+} // end _RUN_SMOKE_TEST

@@ -8,8 +8,51 @@
 // Area of Interest
 // ============================================================
 
-/** Full study region: Western Siberian Lowland */
-var FULL_AOI = ee.Geometry.Rectangle([60, 55, 85, 68]);
+/** Западно-Сибирская равнина (shapefile с 8 природными зонами) */
+var WSP = ee.FeatureCollection('projects/nodal-thunder-481307-u1/assets/zapsib');
+
+/** Full study region: контур ЗСР */
+var FULL_AOI = WSP.geometry();
+
+// ============================================================
+// Природные зоны ЗСР (поле ID в shapefile)
+// ============================================================
+
+var ZONES = {
+  1: 'tundra',
+  2: 'forest_tundra',
+  3: 'northern_taiga',
+  4: 'middle_taiga',
+  5: 'southern_taiga',
+  6: 'subtaiga',
+  7: 'forest_steppe',
+  8: 'steppe'
+};
+
+var ZONE_TUNDRA        = WSP.filter(ee.Filter.eq('ID', 1));
+var ZONE_FOREST_TUNDRA = WSP.filter(ee.Filter.eq('ID', 2));
+var ZONE_NORTH_TAIGA   = WSP.filter(ee.Filter.eq('ID', 3));
+var ZONE_MIDDLE_TAIGA  = WSP.filter(ee.Filter.eq('ID', 4));
+var ZONE_SOUTH_TAIGA   = WSP.filter(ee.Filter.eq('ID', 5));
+var ZONE_SUBTAIGA      = WSP.filter(ee.Filter.eq('ID', 6));
+var ZONE_FOREST_STEPPE = WSP.filter(ee.Filter.eq('ID', 7));
+var ZONE_STEPPE        = WSP.filter(ee.Filter.eq('ID', 8));
+
+/** Болотные зоны: тундра — подтайга (ID 1–6) */
+var WETLAND_ZONES = WSP.filter(ee.Filter.lte('ID', 6));
+
+/** Палитра для визуализации 8 зон */
+var ZONE_PALETTE = [
+  'white',     // 0 — нет
+  'lightblue', // 1 — тундра
+  'cyan',      // 2 — лесотундра
+  '#1a9850',   // 3 — сев. тайга
+  '#006837',   // 4 — средн. тайга
+  '#a6d96a',   // 5 — южн. тайга
+  '#d9ef8b',   // 6 — подтайга
+  '#fee08b',   // 7 — лесостепь
+  '#fdae61'    // 8 — степь
+];
 
 /** Test AOI: Mukhrino Field Station vicinity */
 var TEST_AOI = ee.Geometry.Rectangle([68.0, 60.5, 69.5, 61.3]);
@@ -112,7 +155,19 @@ var XCH4_VIS = {
 // Exports
 // ============================================================
 
+exports.WSP = WSP;
 exports.FULL_AOI = FULL_AOI;
+exports.ZONES = ZONES;
+exports.ZONE_TUNDRA = ZONE_TUNDRA;
+exports.ZONE_FOREST_TUNDRA = ZONE_FOREST_TUNDRA;
+exports.ZONE_NORTH_TAIGA = ZONE_NORTH_TAIGA;
+exports.ZONE_MIDDLE_TAIGA = ZONE_MIDDLE_TAIGA;
+exports.ZONE_SOUTH_TAIGA = ZONE_SOUTH_TAIGA;
+exports.ZONE_SUBTAIGA = ZONE_SUBTAIGA;
+exports.ZONE_FOREST_STEPPE = ZONE_FOREST_STEPPE;
+exports.ZONE_STEPPE = ZONE_STEPPE;
+exports.WETLAND_ZONES = WETLAND_ZONES;
+exports.ZONE_PALETTE = ZONE_PALETTE;
 exports.TEST_AOI = TEST_AOI;
 exports.MUKHRINO = MUKHRINO;
 exports.BAKCHAR = BAKCHAR;
