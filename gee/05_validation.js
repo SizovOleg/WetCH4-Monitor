@@ -36,7 +36,7 @@ var GROUND_DATA = ee.FeatureCollection([
     ch4_flux: 2.76, source: 'Dyukarev2024'}),
   ee.Feature(null, {site: 'mukhrino', type: 'ridge', month: 6, year: 2023,
     ch4_flux: 0.08, source: 'Dyukarev2024'}),
-  // Chechin/Alekseychik 2024 — Мухрино, июнь 2022
+  // Chechin et al., 2024 — Мухрино, июнь 2022
   ee.Feature(null, {site: 'mukhrino', type: 'hollow', month: 6, year: 2022,
     ch4_flux: 6.0, source: 'Chechin2024'}),
   ee.Feature(null, {site: 'mukhrino', type: 'waterlogged_hollow', month: 6, year: 2022,

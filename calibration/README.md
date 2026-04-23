@@ -5,7 +5,7 @@
 | File | Source | DOI / Reference | Data type | Period |
 |------|--------|-----------------|-----------|--------|
 | mukhrino_ch4.csv | Dyukarev et al. (2024) | edgccjournal.org/EDGCC/article/view/636456 | Auto-chamber CH₄, Mukhrino | Jun 2023 |
-| mukhrino_ch4.csv | Chechin/Alekseychik et al. (2024) | doi:10.3390/f15010102 | Static chamber + EC CH₄, Mukhrino | Jun 2022 |
+| mukhrino_ch4.csv | Chechin et al. (2024) | doi:10.3390/f15010102 | Static chamber + EC CH₄, Mukhrino | Jun 2022 |
 | mukhrino_meteo.csv | Dyukarev et al. (2020) | doi:10.5281/zenodo.4323024 | Meteo, Mukhrino | 2010-2019 |
 | sabrekov_bc8.csv | Sabrekov et al. (2011, 2013) | doi:10.1134/S0016852113020076 | Chamber CH₄ by Bc8 type | 2007-2010 |
 | bakchar_ch4.csv | Veretennikova & Dyukarev (2021) | doi:10.5281/zenodo.4718848 | Chamber CH₄, Bakchar | 2016-2018 |
