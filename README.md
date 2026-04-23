@@ -11,6 +11,18 @@ steppe, May–October, 2019–2025.
 **Live app:**
 [WetCH4 Monitor on Google Earth Engine](https://nodal-thunder-481307-u1.projects.earthengine.app/view/wetch4-monitor)
 
+> ### ✏️ Draw your own region
+>
+> The app has **two modes**:
+>
+> 1. **Western Siberia** — preset view of the whole plain, instant (precomputed assets).
+> 2. **Custom AOI** — switch the mode selector and **sketch any polygon on the map**. The app recomputes
+>    wetland area, seasonal ΔCH₄, XCH₄ over wetlands vs forests and a first-order emission estimate
+>    on the fly for exactly your region of interest — a single river basin, one natural zone,
+>    a protected area, a peat field, whatever. Takes 30–60 s per run.
+>
+> No coding, no Earth Engine account required — a public Google login is enough.
+
 ![Figure 2 — seasonal XCH4 and delta CH4 across WSP](article/figures/fig2_seasonal.png)
 
 ---
