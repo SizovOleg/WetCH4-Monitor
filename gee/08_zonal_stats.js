@@ -228,7 +228,7 @@ var _SHOW_ZONE_CHARTS = false;
 
 if (_SHOW_ZONE_CHARTS) {
 
-var ROOT = 'projects/nodal-thunder-481307-u1/assets/';
+var ROOT = 'projects/nodal-thunder-481307-u1/assets/WetLandCH4/';
 var zsAsset = ee.FeatureCollection(ROOT + 'zonal_seasonal');
 
 var zoneNameList = ['', 'Tundra', 'Forest-tundra', 'Northern taiga',
@@ -302,5 +302,5 @@ Export.table.toDrive({
 Export.table.toAsset({
   collection: zonalSeasonal,
   description: 'asset_zonal_seasonal',
-  assetId: 'projects/nodal-thunder-481307-u1/assets/zonal_seasonal'
+  assetId: 'projects/nodal-thunder-481307-u1/assets/WetLandCH4/zonal_seasonal'
 });

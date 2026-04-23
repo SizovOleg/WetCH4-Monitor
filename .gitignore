@@ -3,9 +3,10 @@
 Thumbs.db
 desktop.ini
 
-# IDE
+# IDE / AI assistants
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 
@@ -18,6 +19,12 @@ __pycache__/
 .venv/
 *.egg-info/
 
+# R
+.Rproj.user/
+.Rhistory
+.RData
+*.Rproj
+
 # Geospatial data (large files)
 *.tif
 *.tiff
@@ -26,11 +33,35 @@ __pycache__/
 *.dbf
 *.shx
 *.prj
+*.cpg
+*.lock
 
 # GEE credentials
 .ee-credentials/
 
-# Temp
+# Temp / backups / Office lockfiles
 *.tmp
 *.bak
 *.log
+~$*
+
+# Internal working docs (kept locally, not shipped)
+CLAUDE.md
+DNA.md
+RNA.md
+ROADMAP.md
+PROJECT_CARD.md
+DevPrompt_*.md
+openspec/
+
+# Article drafts (manuscript files kept private until publication)
+article/*.md
+article/*.docx
+article/gis/
+
+# Large raw data folders (not needed for reproduction)
+dukarev/
+vector/
+paper/
+validation/
+screenshots/

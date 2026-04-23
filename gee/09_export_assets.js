@@ -7,8 +7,8 @@
 var c = require('users/ntcomz18_sand/wetch4_ws:gee/lib/constants');
 var tropomiModule = require('users/ntcomz18_sand/wetch4_ws:gee/02_tropomi_monthly');
 
-// Asset root (Cloud project)
-var ROOT = 'projects/nodal-thunder-481307-u1/assets/';
+// Asset root (Cloud project) — все ассеты складываются в папку WetLandCH4/
+var ROOT = 'projects/nodal-thunder-481307-u1/assets/WetLandCH4/';
 
 var FULL_AOI = c.FULL_AOI.simplify(1000);
 
