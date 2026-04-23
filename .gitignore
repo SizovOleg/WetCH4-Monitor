@@ -58,6 +58,7 @@ openspec/
 article/*.md
 article/*.docx
 article/gis/
+article/figures/Рис*
 
 # Large raw data folders (not needed for reproduction)
 dukarev/
