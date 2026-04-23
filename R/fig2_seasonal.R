@@ -1,5 +1,5 @@
 # =============================================================================
-# Рис. 3. Сезонный ход XCH₄ и ΔCH₄ (полный AOI, среднее 2019–2025)
+# Рис. 2. Сезонный ход XCH₄ и ΔCH₄ (полный AOI, среднее 2019–2025)
 # Источник данных: article_t5_full_aoi_monthly.csv
 # Метрика: среднее по годам значения из месячных композитов TROPOMI
 # =============================================================================
@@ -98,9 +98,9 @@ fig3b <- ggplot(season, aes(x = month, y = delta_ch4)) +
 
 fig3 <- fig3a / fig3b + plot_layout(heights = c(1, 1))
 
-ggsave(file.path(out_dir, "fig3_seasonal.png"), fig3,
+ggsave(file.path(out_dir, "fig2_seasonal.png"), fig3,
        width = 14, height = 13, units = "cm", dpi = 400)
 
-cat("✓ Рис. 3 сохранён в", out_dir, "\n")
+cat("✓ Рис. 2 сохранён в", out_dir, "\n")
 cat("ΔCH₄ по месяцам (ppb):",
     paste(sprintf("%.1f", season$delta_ch4), collapse = ", "), "\n")

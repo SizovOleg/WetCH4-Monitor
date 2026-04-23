@@ -1,17 +1,17 @@
 # =============================================================================
-# Запуск всех скриптов рисунков. Запускать из папки R/:
-#   cd R && Rscript run_all.R
+# Run all figure scripts. Execute from the project root:
+#   Rscript R/run_all.R
+# Each script reads from article/data/ and writes to article/figures/.
 # =============================================================================
 
-scripts <- c("fig3_seasonal.R",
-             "fig4_zonal.R",
-             "fig5_zonal_seasonal.R",
-             "fig6_stations.R",
-             "fig7_validation.R")
+scripts <- c("R/fig2_seasonal.R",
+             "R/fig3_zonal.R",
+             "R/fig4_zonal_seasonal.R",
+             "R/fig5_stations.R")
 
 for (s in scripts) {
   cat("\n===", s, "===\n")
   source(s, echo = FALSE)
 }
 
-cat("\n\nВсе рисунки сохранены в article/figures/\n")
+cat("\n\nAll figures saved to article/figures/\n")

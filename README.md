@@ -11,7 +11,36 @@ steppe, May–October, 2019–2025.
 **Live app:**
 [WetCH4 Monitor on Google Earth Engine](https://nodal-thunder-481307-u1.projects.earthengine.app/view/wetch4-monitor)
 
-![Figure 3 — seasonal XCH4 and delta CH4 across WSP](article/figures/fig3_seasonal.png)
+![Figure 2 — seasonal XCH4 and delta CH4 across WSP](article/figures/fig2_seasonal.png)
+
+---
+
+## Why this project
+
+West Siberian peatlands are one of the largest natural sources of methane in
+the Northern Hemisphere, yet high-latitude emissions remain poorly constrained
+by in-situ networks alone. This project:
+
+* **Turns TROPOMI scenes into a practical decision tool** — one click in a
+  public Earth Engine app shows where and when wetland CH4 is elevated, by
+  zone, by month, with a total emission estimate for the whole plain.
+* **Links satellite signal to ground truth.** Three eddy-covariance stations
+  (Mukhrino, Bakchar, Zotino) anchor the space-borne enhancement to measured
+  fluxes, so the map is not just a colourful image but a calibrated proxy.
+* **Is fully reproducible.** Every figure in the article is rebuilt from the
+  CSV tables and R scripts shipped here, and every GEE asset is rebuilt from
+  the JS modules in `gee/`. Nothing is hand-edited.
+* **Is reusable.** The workflow — land-cover mask + TROPOMI monthly mean +
+  forest-background subtraction + zonal aggregation — transfers directly to
+  the Hudson Bay Lowlands, Congo basin, or any other large peatland region
+  where TROPOMI signal-to-noise is sufficient.
+
+Practical audiences:
+
+* Climate-modelling groups needing a regional bottom-up prior.
+* Policy analysts tracking Russia's peatland-CH4 inventory.
+* Students and educators exploring remote sensing of greenhouse gases.
+* Fieldwork planners choosing campaign locations and timing.
 
 ---
 
@@ -33,17 +62,16 @@ gee/                      Google Earth Engine JavaScript modules
   lib/                    Shared constants, palettes, utilities
 
 R/                        Figure scripts for the accompanying article
-  fig3_seasonal.R         Seasonal XCH4 and delta CH4 across WSP
-  fig4_zonal.R            Zonal delta CH4 + delta CH4 vs air-temperature scatter
-  fig5_zonal_seasonal.R   Seasonal delta CH4 by zone
-  fig6_stations.R         Seasonal XCH4 and delta CH4 at three stations
-  fig7_validation.R       TROPOMI delta CH4 vs ground CH4 flux (not published)
+  fig2_seasonal.R         Seasonal XCH4 and delta CH4 across WSP
+  fig3_zonal.R            Zonal delta CH4 + delta CH4 vs air-temperature scatter
+  fig4_zonal_seasonal.R   Seasonal delta CH4 by zone
+  fig5_stations.R         Seasonal XCH4 and delta CH4 at three stations
   run_all.R               Re-build all figures in one pass
   README.md               R usage notes
 
 article/
   data/                   CSV tables exported from GEE (inputs for R scripts)
-  figures/                Final PNG figures (Fig. 3-6)
+  figures/                Final PNG figures (Fig. 2-5)
 
 calibration/              Ground CH4 flux data (Mukhrino, Bakchar, ZOTTO)
 ```

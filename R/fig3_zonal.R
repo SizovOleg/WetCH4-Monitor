@@ -1,5 +1,5 @@
 # =============================================================================
-# Рис. 4. ΔCH₄ по природным зонам и связь с температурой воздуха
+# Рис. 3. ΔCH₄ по природным зонам и связь с температурой воздуха
 # Источник данных: d:\test\wetland_zapsib\article\data\article_t1_zonal_stats.csv
 # =============================================================================
 
@@ -107,10 +107,10 @@ fig4b <- ggplot(t1, aes(x = t_air_wetland_c, y = delta_ch4_ppb,
 
 fig4 <- fig4a + fig4b + plot_layout(widths = c(1, 1.15))
 
-ggsave(file.path(out_dir, "fig4_zonal.png"), fig4,
+ggsave(file.path(out_dir, "fig3_zonal.png"), fig4,
        width = 18, height = 9, units = "cm", dpi = 400)
 
-cat("✓ Рис. 4 сохранён в", out_dir, "\n")
+cat("✓ Рис. 3 сохранён в", out_dir, "\n")
 
 # --- регрессия ΔCH₄ ~ заболоченность × температура --------------------------
 
