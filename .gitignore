@@ -64,5 +64,10 @@ article/figures/Рис*
 dukarev/
 vector/
 paper/
+papers/
 validation/
 screenshots/
+
+# Early CSV exports (superseded by article/data/article_t*.csv)
+wetch4_zonal_statistics_8zones*.csv
+wetch4_zonal_seasonal.csv
