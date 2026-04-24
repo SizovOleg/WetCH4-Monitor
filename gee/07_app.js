@@ -139,6 +139,34 @@ function fmtDelta(ppb) {
   return (ppb >= 0 ? '+' : '') + s + ' ppb';
 }
 
+// Haversine distance (km) для nearest-station lookup
+function haversineKm(lat1, lon1, lat2, lon2) {
+  var R = 6371;
+  var toRad = Math.PI / 180;
+  var dLat = (lat2 - lat1) * toRad;
+  var dLon = (lon2 - lon1) * toRad;
+  var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// CGLS код → краткая категория для inspector
+function cglsLabel(code) {
+  if (code === 90) return 'Wetland';
+  if (code >= 111 && code <= 126) return 'Forest';
+  if (code === 80 || code === 200) return 'Water';
+  if (code === 40) return 'Cropland';
+  if (code === 20 || code === 30 || code === 100) return 'Grassland/shrubs';
+  if (code === 50 || code === 60 || code === 70) return 'Bare/urban/snow';
+  return 'Other';
+}
+
+// Zone ID → имя
+var ZONE_NAMES = {1:'Tundra', 2:'Forest-tundra', 3:'Northern taiga',
+                  4:'Middle taiga', 5:'Southern taiga', 6:'Subtaiga',
+                  7:'Forest-steppe', 8:'Steppe'};
+
 // ============================================================
 // F. UI widgets
 // ============================================================
@@ -278,6 +306,36 @@ btnExportDelta.onClick(function() {
     '.tif \u2014 open Tasks tab in Code Editor to run.');
   exportStatus.style().set('color', TH.success);
 });
+
+// --- Pixel inspector widgets (внизу Overview tab) ---
+// Показывает инфо в точке клика на карте: координаты, ΔCH₄ в текущем slice,
+// land cover, природная зона, ближайшая станция.
+var inspectorHintLabel = ui.Label('Click the map to inspect a pixel.',
+  {fontSize: '11px', color: TH.textMuted, fontStyle: 'italic', margin: '0 0 4px 0'});
+var inspectorCoordsLabel = ui.Label('', {fontSize: '11px', color: TH.textDark});
+var inspectorDeltaLabel = ui.Label('', {fontSize: '12px', fontWeight: 'bold',
+  color: TH.textDark, margin: '2px 0'});
+var inspectorLandcoverLabel = ui.Label('', {fontSize: '11px', color: TH.textMuted});
+var inspectorZoneLabel = ui.Label('', {fontSize: '11px', color: TH.textMuted});
+var inspectorStationLabel = ui.Label('', {fontSize: '11px', color: TH.textMuted});
+
+var inspectorPanel = ui.Panel([
+  inspectorHintLabel,
+  inspectorCoordsLabel,
+  inspectorDeltaLabel,
+  inspectorLandcoverLabel,
+  inspectorZoneLabel,
+  inspectorStationLabel
+]);
+
+function clearInspector(hint) {
+  inspectorHintLabel.setValue(hint || 'Click the map to inspect a pixel.');
+  inspectorCoordsLabel.setValue('');
+  inspectorDeltaLabel.setValue('');
+  inspectorLandcoverLabel.setValue('');
+  inspectorZoneLabel.setValue('');
+  inspectorStationLabel.setValue('');
+}
 
 // --- Chart panels (помещаются в Charts tab) ---
 var wsChartPanel1 = ui.Panel([], null, {margin: '4px 0'});
@@ -529,7 +587,11 @@ function initLayers() {
   // Delta CH4 — placeholder, заполнит updateDeltaLayer
   L.delta = ui.Map.Layer(ee.Image(), deltaVis, '\u0394CH\u2084', cbDelta.getValue());
 
-  // Заливаем слоты фиксировано (0 — delta внизу; 6 — boundary сверху)
+  // Click marker — persistent маркер в точке Map.onClick (hidden by default)
+  L.clickMarker = ui.Map.Layer(
+    ee.FeatureCollection([]), {}, 'Click marker', false);
+
+  // Заливаем слоты фиксировано (0 — delta внизу; 7 — click marker сверху)
   mapPanel.layers().set(0, L.delta);
   mapPanel.layers().set(1, L.wetland);
   mapPanel.layers().set(2, L.zones);
@@ -537,6 +599,7 @@ function initLayers() {
   mapPanel.layers().set(4, L.bak);
   mapPanel.layers().set(5, L.zotto);
   mapPanel.layers().set(6, L.boundary);
+  mapPanel.layers().set(7, L.clickMarker);
 }
 
 // Контекст текущего slice (для legend caption и Export-кнопки).
@@ -918,6 +981,9 @@ function runCustomAnalysis() {
 // Мгновенно показываем caption "computing…" чтобы пользователь видел отклик.
 function ensureDeltaAndUpdate() {
   legendPeriodLabel.setValue('computing\u2026');
+  // Soft reset: old inspector value no longer matches new slice
+  if (L.clickMarker) L.clickMarker.setShown(false);
+  clearInspector('Layer changed \u2014 click the map to inspect the new slice.');
   if (!cbDelta.getValue()) {
     cbDelta.setValue(true);   // триггерит cbDelta.onChange → updateDeltaLayer
   } else {
@@ -952,6 +1018,85 @@ btnClear.onClick(function() {
   customChartsPanel.style().set('shown', false);
   customStatus.setValue('Draw a polygon on the map, then press Run.');
   customStatus.style().set('color', TH.textMuted);
+});
+
+// ============================================================
+// Pixel inspector — Map.onClick → обновить Inspector card в Info tab
+// ============================================================
+
+// Stations — клиентские координаты для nearest-lookup (быстрее чем EE запрос)
+var STATION_COORDS = [
+  {name: 'Mukhrino', lat: 60.892, lon: 68.682},
+  {name: 'Bakchar',  lat: 56.93,  lon: 82.67},
+  {name: 'ZOTTO',    lat: 60.80,  lon: 89.35}
+];
+
+mapPanel.onClick(function(coords) {
+  var lat = coords.lat, lon = coords.lon;
+  var pt = ee.Geometry.Point([lon, lat]);
+
+  // Визуальный маркер в точке клика
+  L.clickMarker.setEeObject(
+    ee.FeatureCollection([ee.Feature(pt)])
+      .style({color: 'black', fillColor: 'FFEB3B', pointSize: 10, width: 2}));
+  L.clickMarker.setShown(true);
+
+  // Координаты — сразу (клиентская операция)
+  inspectorHintLabel.setValue('\u2713 Inspected point');
+  inspectorCoordsLabel.setValue(
+    'Lat ' + lat.toFixed(3) + '\u00B0, Lon ' + lon.toFixed(3) + '\u00B0');
+  inspectorDeltaLabel.setValue('\u0394CH\u2084: loading\u2026');
+  inspectorLandcoverLabel.setValue('Land cover: loading\u2026');
+  inspectorZoneLabel.setValue('Zone: loading\u2026');
+
+  // Nearest station — сразу (клиентская Haversine)
+  var nearest = null, minDist = Infinity;
+  STATION_COORDS.forEach(function(s) {
+    var d = haversineKm(lat, lon, s.lat, s.lon);
+    if (d < minDist) { minDist = d; nearest = s; }
+  });
+  inspectorStationLabel.setValue(
+    'Nearest station: ' + nearest.name +
+    ' (' + Math.round(minDist) + ' km)');
+
+  // ΔCH₄ — из текущего layer (async)
+  if (currentDelta.img) {
+    currentDelta.img.reduceRegion({
+      reducer: ee.Reducer.mean(),
+      geometry: pt.buffer(3500),
+      scale: 7000, maxPixels: 1e6, bestEffort: true
+    }).get('delta_ch4').evaluate(function(v, err) {
+      if (err || v === null || v === undefined) {
+        inspectorDeltaLabel.setValue('\u0394CH\u2084: no data at this pixel');
+      } else {
+        inspectorDeltaLabel.setValue('\u0394CH\u2084: ' + fmtDelta(v));
+      }
+    });
+  } else {
+    inspectorDeltaLabel.setValue('\u0394CH\u2084: layer not loaded');
+  }
+
+  // Land cover (CGLS 100 m)
+  cgls.reduceRegion({
+    reducer: ee.Reducer.first(),
+    geometry: pt, scale: 100
+  }).get('discrete_classification').evaluate(function(code, err) {
+    if (err || code === null || code === undefined) {
+      inspectorLandcoverLabel.setValue('Land cover: —');
+    } else {
+      inspectorLandcoverLabel.setValue(
+        'Land cover: ' + cglsLabel(code) + ' (CGLS ' + code + ')');
+    }
+  });
+
+  // Natural zone (WSP)
+  WSP.filterBounds(pt).first().get('ID').evaluate(function(id, err) {
+    if (err || id === null || id === undefined) {
+      inspectorZoneLabel.setValue('Zone: outside WSP');
+    } else {
+      inspectorZoneLabel.setValue('Zone: ' + ZONE_NAMES[id] + ' (ID ' + id + ')');
+    }
+  });
 });
 
 modeSelect.onChange(function(mode) {
@@ -1026,8 +1171,10 @@ var chartsTab = ui.Panel([
   customChartsPanel
 ], null, {shown: false});
 
-// --- Info: disclaimer + about ---
+// --- Info: Pixel inspector + disclaimer + about ---
 var infoTab = ui.Panel([
+  sectionLabel('Pixel inspector'),
+  card([inspectorPanel]),
   sectionLabel('Limitations'),
   disclaimer,
   sectionLabel('About'),
