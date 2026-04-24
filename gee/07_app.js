@@ -190,6 +190,23 @@ var monthSelect = ui.Select({
 var monthRow = ui.Panel([ui.Label('Month:', {margin: '4px 8px 4px 0', color: TH.textMuted}), monthSelect],
   ui.Panel.Layout.flow('horizontal'));
 
+// --- Coverage selector: wetlands-only vs full land ---
+// Default = wetlands only (соответствует основному scientific message статьи:
+// enhancement анализируется над болотами). Full land показывает всю ЗСР —
+// полезно для контекста (antropogenic hotspots, сельхоз).
+var coverageSelect = ui.Select({
+  items: [
+    {label: 'Wetlands only', value: 'wetlands'},
+    {label: 'Full land',     value: 'full'}
+  ],
+  value: 'wetlands',
+  style: {stretch: 'horizontal'}
+});
+var coverageRow = ui.Panel(
+  [ui.Label('Coverage:', {margin: '4px 8px 4px 0', color: TH.textMuted}),
+   coverageSelect],
+  ui.Panel.Layout.flow('horizontal'));
+
 // Условная видимость
 function updateTimeVisibility() {
   var type = typeSelect.getValue();
@@ -246,29 +263,26 @@ btnExportDelta.onClick(function() {
   exportStatus.style().set('color', TH.success);
 });
 
-// --- Chart panels ---
+// --- Chart panels (помещаются в Charts tab) ---
 var wsChartPanel1 = ui.Panel([], null, {margin: '4px 0'});
 var wsChartPanel2 = ui.Panel([], null, {margin: '4px 0'});
 var wsChartPanel3 = ui.Panel([], null, {margin: '4px 0'});
 var wsChartPanel4 = ui.Panel([], null, {margin: '4px 0'});
 
-// --- Mode 1 panel (W.Siberia) ---
-var wsSibPanel = ui.Panel([
+// --- Mode 1 controls (Time/Layers/Summary) ---
+var wsSibControlsPanel = ui.Panel([
   sectionLabel('Time period'),
-  card([typeSelect, yearRow, monthRow]),
+  card([typeSelect, yearRow, monthRow, coverageRow]),
 
   sectionLabel('Map layers'),
   card([cbDelta, cbWetland, cbZones, cbStations, cbBoundary]),
 
   sectionLabel('Summary'),
   card([wsAreaLabel, wsDeltaLabel, wsEmissionLabel,
-        btnExportDelta, exportStatus]),
-
-  sectionLabel('Charts'),
-  wsChartPanel1, wsChartPanel2, wsChartPanel3, wsChartPanel4
+        btnExportDelta, exportStatus])
 ]);
 
-// --- Mode 2 panel (Custom) ---
+// --- Mode 2 (Custom) controls ---
 var customStatus = ui.Label('Draw a polygon on the map, then press Run.',
   {fontSize: '11px', color: TH.textMuted});
 
@@ -281,9 +295,13 @@ var btnClear = ui.Button({
   style: {stretch: 'horizontal', margin: '2px 0'}
 });
 var customResultsPanel = ui.Panel();
+// Custom results (numbers + charts) будут перенаправлены в Charts tab
+var customChartsPanel = ui.Panel([], null,
+  {margin: '4px 0', shown: false});
 
-var customPanel = ui.Panel([
-  customStatus, btnRun, btnClear, customResultsPanel
+var customControlsPanel = ui.Panel([
+  sectionLabel('Custom AOI'),
+  card([customStatus, btnRun, btnClear, customResultsPanel])
 ], null, {shown: false});
 
 // --- Disclaimer (компактный) ---
@@ -530,6 +548,12 @@ function updateDeltaLayer() {
     label = MONTH_NAMES[m2] + ' ' + y2;
     description = MONTH_NAMES[m2] + '_' + y2;
   }
+
+  // Coverage режим — user-facing суффикс к label
+  var coverage = coverageSelect.getValue();  // 'wetlands' | 'full'
+  label = label + ' \u00b7 ' + (coverage === 'wetlands' ? 'wetlands only' : 'full land');
+  description = description + '_' + coverage;
+
   // Sanitize description для Export task name (без пробелов, unicode и т.п.)
   description = description.replace(/[^A-Za-z0-9_]/g, '_');
 
@@ -556,10 +580,13 @@ function updateDeltaLayer() {
       return;
     }
 
-    var deltaImg = composite
+    var deltaBase = composite
       .subtract(ee.Image.constant(bgVal))
-      .rename('delta_ch4').clip(FULL_AOI)
-      .updateMask(wetlandBinary);
+      .rename('delta_ch4').clip(FULL_AOI);
+
+    var deltaImg = (coverage === 'wetlands')
+      ? deltaBase.updateMask(wetlandBinary)
+      : deltaBase;
 
     currentDelta = {img: deltaImg, label: label, description: description};
 
@@ -717,9 +744,11 @@ function runCustomAnalysis() {
   }
   var customAOI = drawLayers.get(0).toGeometry();
   mapPanel.centerObject(customAOI);
-  customStatus.setValue('\u23F3 Computing... (30\u201360 sec)');
+  customStatus.setValue('\u23F3 Computing... (30\u201360 sec). Charts will appear in the Charts tab.');
   customStatus.style().set('color', TH.textMuted);
   customResultsPanel.clear();
+  customChartsPanel.clear();
+  customChartsPanel.style().set('shown', true);
 
   var wetMask = cgls.eq(90);
 
@@ -785,6 +814,8 @@ function runCustomAnalysis() {
     customStatus.setValue('\u2705 Done!');
     customStatus.style().set('color', TH.success);
 
+    // Числа остаются в Overview (customResultsPanel), чтобы пользователь
+    // сразу видел результаты под кнопкой Run
     if (d.wetArea !== null) {
       customResultsPanel.add(ui.Label('Wetland area: ' + fmtArea(d.wetArea / 1e6),
         {fontWeight: 'bold', fontSize: '12px'}));
@@ -793,8 +824,12 @@ function runCustomAnalysis() {
       customResultsPanel.add(ui.Label('Mean \u0394CH\u2084: ' +
         fmtDelta(d.meanDelta), {fontSize: '12px'}));
     }
+    customResultsPanel.add(ui.Label(
+      '\u2192 Open the Charts tab for seasonal plots.',
+      {fontSize: '10px', color: TH.textMuted, margin: '4px 0 0 0'}));
   });
 
+  // Графики — в Charts tab (customChartsPanel)
   var chart1 = ui.Chart.feature.byFeature(seasonalFC, 'month',
       ['xch4_wetland', 'xch4_forest_wsp'])
     .setChartType('LineChart')
@@ -809,7 +844,7 @@ function runCustomAnalysis() {
             labelInLegend: 'Forests (WSP-wide)'}
       }
     });
-  customResultsPanel.add(chart1);
+  customChartsPanel.add(chart1);
 
   var chart2 = ui.Chart.feature.byFeature(seasonalFC, 'month', 'delta_ch4')
     .setChartType('ColumnChart')
@@ -819,7 +854,7 @@ function runCustomAnalysis() {
       vAxis: {title: '\u0394CH\u2084 (ppb)', baseline: 0},
       colors: ['#1f6feb'], legend: 'none'
     });
-  customResultsPanel.add(chart2);
+  customChartsPanel.add(chart2);
 }
 
 // ============================================================
@@ -840,6 +875,7 @@ function ensureDeltaAndUpdate() {
 typeSelect.onChange(function() { updateTimeVisibility(); ensureDeltaAndUpdate(); });
 yearSelect.onChange(ensureDeltaAndUpdate);
 monthSelect.onChange(ensureDeltaAndUpdate);
+coverageSelect.onChange(ensureDeltaAndUpdate);
 
 // Чекбоксы — только переключают видимость своего слоя, без reset
 cbDelta.onChange(function(v) {
@@ -859,21 +895,25 @@ btnRun.onClick(runCustomAnalysis);
 btnClear.onClick(function() {
   drawingTools.layers().reset();
   customResultsPanel.clear();
+  customChartsPanel.clear();
+  customChartsPanel.style().set('shown', false);
   customStatus.setValue('Draw a polygon on the map, then press Run.');
   customStatus.style().set('color', TH.textMuted);
 });
 
 modeSelect.onChange(function(mode) {
   if (mode === 'Western Siberia') {
-    wsSibPanel.style().set('shown', true);
-    customPanel.style().set('shown', false);
+    wsSibControlsPanel.style().set('shown', true);
+    customControlsPanel.style().set('shown', false);
+    customChartsPanel.style().set('shown', false);
     drawingTools.setShown(false);
     deltaLegend.style().set('shown', true);
     initLayers();
     updateDeltaLayer();
   } else {
-    wsSibPanel.style().set('shown', false);
-    customPanel.style().set('shown', true);
+    wsSibControlsPanel.style().set('shown', false);
+    customControlsPanel.style().set('shown', true);
+    // customChartsPanel показывается только после Run (в runCustomAnalysis)
     drawingTools.setShown(true);
     drawingTools.setShape('polygon');
     deltaLegend.style().set('shown', true);
@@ -886,16 +926,94 @@ modeSelect.onChange(function(mode) {
 // L. Layout
 // ============================================================
 
+// ============================================================
+// Tab bar — 3 таба: Overview / Charts / Info
+// ============================================================
+
+function buildTabButton(name, isActive) {
+  return ui.Button({
+    label: name,
+    style: {
+      stretch: 'horizontal', margin: '0',
+      // Активный таб — accent цвет, остальные — нейтральные
+      color: isActive ? 'white' : TH.textDark,
+      backgroundColor: isActive ? TH.accent : TH.bgCard
+    }
+  });
+}
+
+var tabOverview = buildTabButton('Overview', true);
+var tabCharts   = buildTabButton('Charts',   false);
+var tabInfo     = buildTabButton('Info',     false);
+
+var tabBar = ui.Panel(
+  [tabOverview, tabCharts, tabInfo],
+  ui.Panel.Layout.flow('horizontal'),
+  {margin: '6px 0 8px 0', stretch: 'horizontal',
+   border: '1px solid ' + TH.border}
+);
+
+// ============================================================
+// Tab contents
+// ============================================================
+
+// --- Overview: Mode + controls (Mode 1 или Mode 2) ---
+var overviewTab = ui.Panel([
+  sectionLabel('Mode'),
+  card([modeSelect]),
+  wsSibControlsPanel,
+  customControlsPanel
+]);
+
+// --- Charts: 4 asset-chart (Mode 1) + 2 custom-chart (Mode 2) ---
+var chartsTab = ui.Panel([
+  sectionLabel('Charts'),
+  wsChartPanel1, wsChartPanel2, wsChartPanel3, wsChartPanel4,
+  customChartsPanel
+], null, {shown: false});
+
+// --- Info: disclaimer + about ---
+var infoTab = ui.Panel([
+  sectionLabel('Limitations'),
+  disclaimer,
+  sectionLabel('About'),
+  aboutPanel
+], null, {shown: false});
+
+// --- Tab switching ---
+function setActiveTab(name) {
+  // Стиль активного таба
+  [[tabOverview, 'Overview'],
+   [tabCharts,   'Charts'],
+   [tabInfo,     'Info']].forEach(function(pair) {
+    var btn = pair[0], btnName = pair[1];
+    btn.style().set('color',
+      (btnName === name) ? 'white' : TH.textDark);
+    btn.style().set('backgroundColor',
+      (btnName === name) ? TH.accent : TH.bgCard);
+  });
+  // Видимость контента
+  overviewTab.style().set('shown', name === 'Overview');
+  chartsTab.style().set('shown',   name === 'Charts');
+  infoTab.style().set('shown',     name === 'Info');
+}
+
+tabOverview.onClick(function() { setActiveTab('Overview'); });
+tabCharts.onClick(function()   { setActiveTab('Charts'); });
+tabInfo.onClick(function()     { setActiveTab('Info'); });
+
+// ============================================================
+// Left panel
+// ============================================================
+
 var leftPanel = ui.Panel({
   widgets: [
     titleLabel, subtitleLabel,
     onboardingPanel,
-    sectionLabel('Mode'),
-    card([modeSelect]),
-    wsSibPanel,
-    customPanel,
-    disclaimer,
-    aboutPanel
+    tabBar,
+    overviewTab,
+    chartsTab,
+    infoTab
   ],
   style: {width: '430px', padding: '8px 12px', backgroundColor: 'white'}
 });
