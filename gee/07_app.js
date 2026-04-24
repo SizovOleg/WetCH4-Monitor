@@ -191,7 +191,9 @@ var onboardingPanel = ui.Panel([
     color: TH.textDark, margin: '0 0 3px 0'}),
   ui.Label(
     '\u2460  Western Siberia \u2014 ready maps, charts and regional stats.\n' +
-    '\u2461  Custom AOI \u2014 draw a polygon, press Run, get \u0394CH\u2084 for your area.',
+    '\u2461  Custom AOI \u2014 draw a polygon, press Run, get \u0394CH\u2084 for your area.\n' +
+    '\u2462  Click any pixel on the map \u2014 see \u0394CH\u2084, land cover, natural\n' +
+    '     zone and nearest station in the Info tab.',
     {fontSize: '11px', color: TH.textMuted, margin: '0', whiteSpace: 'pre'})
 ], null, {
   backgroundColor: '#f0f7ff',
