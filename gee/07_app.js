@@ -931,13 +931,14 @@ modeSelect.onChange(function(mode) {
 // ============================================================
 
 function buildTabButton(name, isActive) {
+  // GEE UI Button плохо рендерит backgroundColor — выделяем активный
+  // таб цветом текста (accent) и bold. Неактивные — серый + normal.
   return ui.Button({
     label: name,
     style: {
       stretch: 'horizontal', margin: '0',
-      // Активный таб — accent цвет, остальные — нейтральные
-      color: isActive ? 'white' : TH.textDark,
-      backgroundColor: isActive ? TH.accent : TH.bgCard
+      color: isActive ? TH.accent : TH.textMuted,
+      fontWeight: isActive ? 'bold' : 'normal'
     }
   });
 }
@@ -982,15 +983,15 @@ var infoTab = ui.Panel([
 
 // --- Tab switching ---
 function setActiveTab(name) {
-  // Стиль активного таба
+  // Стиль активного таба — accent цвет текста + bold (backgroundColor
+  // не используется: GEE UI Button неконсистентно его рендерит).
   [[tabOverview, 'Overview'],
    [tabCharts,   'Charts'],
    [tabInfo,     'Info']].forEach(function(pair) {
     var btn = pair[0], btnName = pair[1];
-    btn.style().set('color',
-      (btnName === name) ? 'white' : TH.textDark);
-    btn.style().set('backgroundColor',
-      (btnName === name) ? TH.accent : TH.bgCard);
+    var active = (btnName === name);
+    btn.style().set('color', active ? TH.accent : TH.textMuted);
+    btn.style().set('fontWeight', active ? 'bold' : 'normal');
   });
   // Видимость контента
   overviewTab.style().set('shown', name === 'Overview');
