@@ -76,11 +76,24 @@ var TH = {
   success:   '#2c974b'
 };
 
+// Typography — три уровня: section / body / caption
 function sectionLabel(text) {
   return ui.Label(text.toUpperCase(), {
     fontWeight: 'bold', fontSize: '11px',
-    margin: '12px 0 6px 0', color: TH.accent
+    margin: '14px 0 6px 0', color: TH.accent, padding: '0'
   });
+}
+
+function bodyLabel(text, extra) {
+  var s = {fontSize: '12px', color: TH.textDark, margin: '0 0 2px 0'};
+  if (extra) { for (var k in extra) s[k] = extra[k]; }
+  return ui.Label(text, s);
+}
+
+function captionLabel(text, extra) {
+  var s = {fontSize: '10px', color: TH.textMuted, margin: '2px 0 0 0'};
+  if (extra) { for (var k in extra) s[k] = extra[k]; }
+  return ui.Label(text, s);
 }
 
 function card(widgets, extra) {
@@ -94,6 +107,22 @@ function card(widgets, extra) {
   return ui.Panel(widgets, null, style);
 }
 
+// Единые форматы чисел для UI
+// Area в км² без дробной части с разделителями тысяч: 673,205 km²
+function fmtArea(km2) {
+  var rounded = Math.round(km2);
+  return rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' km\u00B2';
+}
+// Emission в Тг с 2 знаками: 8.83 Tg CH₄ yr⁻¹
+function fmtEmission(tg) {
+  return tg.toFixed(2) + ' Tg CH\u2084 yr\u207B\u00B9';
+}
+// Delta в ppb с 1 знаком и явным знаком: +11.8 ppb, −0.3 ppb
+function fmtDelta(ppb) {
+  var s = ppb.toFixed(1);
+  return (ppb >= 0 ? '+' : '') + s + ' ppb';
+}
+
 // ============================================================
 // F. UI widgets
 // ============================================================
@@ -101,8 +130,31 @@ function card(widgets, extra) {
 // --- Title ---
 var titleLabel = ui.Label('WetCH₄ Monitor',
   {fontWeight: 'bold', fontSize: '20px', margin: '4px 0 0 4px', color: TH.textDark});
-var subtitleLabel = ui.Label('Wetland methane enhancement from TROPOMI',
+var subtitleLabel = ui.Label('Wetland methane enhancement from TROPOMI \u00b7 2019\u20132025',
   {fontSize: '12px', color: TH.textMuted, margin: '0 0 4px 4px'});
+
+// --- Onboarding (виден сразу при загрузке) ---
+var onboardingPanel = ui.Panel([
+  ui.Label('What it shows', {fontWeight: 'bold', fontSize: '11px',
+    color: TH.textDark, margin: '0 0 3px 0'}),
+  ui.Label(
+    'CH\u2084 excess over West-Siberian wetlands, derived from TROPOMI\n' +
+    'column-averaged methane (Sentinel-5P, 2019\u20132025).',
+    {fontSize: '11px', color: TH.textMuted, margin: '0 0 8px 0',
+     whiteSpace: 'pre'}),
+
+  ui.Label('How to start', {fontWeight: 'bold', fontSize: '11px',
+    color: TH.textDark, margin: '0 0 3px 0'}),
+  ui.Label(
+    '\u2460  Western Siberia \u2014 ready maps, charts and regional stats.\n' +
+    '\u2461  Custom AOI \u2014 draw a polygon, press Run, get \u0394CH\u2084 for your area.',
+    {fontSize: '11px', color: TH.textMuted, margin: '0', whiteSpace: 'pre'})
+], null, {
+  backgroundColor: '#f0f7ff',
+  border: '1px solid #c7e0ff',
+  padding: '10px 12px',
+  margin: '6px 0 4px 0'
+});
 
 // --- Mode selector ---
 var modeSelect = ui.Select({
@@ -158,6 +210,42 @@ var wsDeltaLabel   = ui.Label('Mean \u0394CH\u2084: \u2026', {fontSize: '12px', 
 var wsEmissionLabel = ui.Label('Emission: \u2026', {fontSize: '12px', color: TH.textDark,
   fontWeight: 'bold'});
 
+// --- Export GeoTIFF button (current ΔCH₄ slice) ---
+// ВНИМАНИЕ: Export.image.toDrive создаёт task в Earth Engine Tasks tab
+// ТЕКУЩЕГО пользователя. Для анонимного viewer'а без GEE-аккаунта задача
+// просто зарегистрируется, но её некому будет подтвердить. Для academic users
+// с GEE account всё работает как обычный Export в их Drive.
+var btnExportDelta = ui.Button({
+  label: '\u2B73 Export slice to Drive (GeoTIFF)',
+  style: {stretch: 'horizontal', margin: '8px 0 2px 0'}
+});
+var exportStatus = ui.Label(
+  'Requires GEE account \u2014 task lands in your Tasks tab.',
+  {fontSize: '10px', color: TH.textMuted, margin: '0'});
+
+btnExportDelta.onClick(function() {
+  if (!currentDelta.img) {
+    exportStatus.setValue('\u26A0 No slice to export \u2014 toggle \u0394CH\u2084 on first.');
+    exportStatus.style().set('color', TH.danger);
+    return;
+  }
+  var name = 'delta_ch4_' + currentDelta.description;
+  Export.image.toDrive({
+    image: currentDelta.img.toFloat(),
+    description: name,
+    fileNamePrefix: name,
+    region: FULL_AOI,
+    scale: 7000,
+    crs: 'EPSG:4326',
+    maxPixels: 1e10,
+    fileFormat: 'GeoTIFF',
+    formatOptions: {cloudOptimized: true}
+  });
+  exportStatus.setValue('\u2713 Task queued: ' + name +
+    '.tif \u2014 open Tasks tab in Code Editor to run.');
+  exportStatus.style().set('color', TH.success);
+});
+
 // --- Chart panels ---
 var wsChartPanel1 = ui.Panel([], null, {margin: '4px 0'});
 var wsChartPanel2 = ui.Panel([], null, {margin: '4px 0'});
@@ -173,7 +261,8 @@ var wsSibPanel = ui.Panel([
   card([cbDelta, cbWetland, cbZones, cbStations, cbBoundary]),
 
   sectionLabel('Summary'),
-  card([wsAreaLabel, wsDeltaLabel, wsEmissionLabel]),
+  card([wsAreaLabel, wsDeltaLabel, wsEmissionLabel,
+        btnExportDelta, exportStatus]),
 
   sectionLabel('Charts'),
   wsChartPanel1, wsChartPanel2, wsChartPanel3, wsChartPanel4
@@ -232,15 +321,21 @@ var aboutPanel = ui.Panel([
 // ============================================================
 
 var mapPanel = ui.Map();
-mapPanel.setOptions('HYBRID');
+// Нейтральная подложка по умолчанию — чтобы не конкурировать
+// с diverging-палитрой ΔCH₄. Пользователь может переключить на HYBRID.
+mapPanel.setOptions('ROADMAP');
 mapPanel.style().set('cursor', 'crosshair');
 var drawingTools = mapPanel.drawingTools();
 drawingTools.setShown(false);
 drawingTools.setDrawModes(['polygon']);
 
-// Color legend для ΔCH₄ (bottom-right) — плавный градиент через Thumbnail
+// Caption с текущим периодом — обновляется при updateDeltaLayer
+var legendPeriodLabel = ui.Label('computing\u2026',
+  {fontSize: '10px', color: TH.textMuted, margin: '0 0 4px 0',
+   textAlign: 'right', stretch: 'horizontal'});
+
+// Color legend для ΔCH₄ (bottom-right) — плавный градиент + 5 тиков + 0
 function buildDeltaLegend() {
-  // Канонический паттерн GEE: pixelLonLat + bbox в params
   var colorBar = ui.Thumbnail({
     image: ee.Image.pixelLonLat().select(0),
     params: {
@@ -253,31 +348,47 @@ function buildDeltaLegend() {
     style: {stretch: 'horizontal', margin: '0', maxHeight: '14px'}
   });
 
+  // 5 делений: -5, 0, +5, +10, +15 (равномерно по шкале -5...15)
+  // Пять подписей равной ширины, чтобы числа встали под соответствующими долями bar-а
+  function tickLabel(text, bold) {
+    return ui.Label(text, {
+      fontSize: '10px', margin: '3px 0 0 0',
+      color: bold ? TH.textDark : TH.textMuted,
+      fontWeight: bold ? 'bold' : 'normal',
+      textAlign: 'center', stretch: 'horizontal', padding: '0'
+    });
+  }
   var ticks = ui.Panel([
-    ui.Label(DELTA_MIN.toString() + ' ppb',
-      {fontSize: '10px', margin: '3px 0 0 0', color: TH.textDark}),
-    ui.Label('', {stretch: 'horizontal', margin: '0'}),
-    ui.Label('+' + DELTA_MAX + ' ppb',
-      {fontSize: '10px', margin: '3px 0 0 0', color: TH.textDark})
+    tickLabel('\u22125', false),   // −5
+    tickLabel('0', true),          // 0 — жирный
+    tickLabel('+5', false),
+    tickLabel('+10', false),
+    tickLabel('+15', false)
   ], ui.Panel.Layout.flow('horizontal'));
 
   var note = ui.Label(
-    'blue \u2014 background \u00B7 red \u2014 emission',
-    {fontSize: '9px', color: TH.textMuted, margin: '2px 0 0 0'});
+    'blue \u00b7 below background    red \u00b7 wetland emission',
+    {fontSize: '9px', color: TH.textMuted, margin: '4px 0 0 0',
+     textAlign: 'center', stretch: 'horizontal'});
+
+  var titleRow = ui.Panel([
+    ui.Label('\u0394CH\u2084, ppb',
+      {fontWeight: 'bold', fontSize: '11px', margin: '0',
+       color: TH.textDark}),
+    legendPeriodLabel
+  ], ui.Panel.Layout.flow('horizontal'), {margin: '0 0 4px 0'});
 
   return ui.Panel([
-    ui.Label('\u0394CH\u2084 enhancement',
-      {fontWeight: 'bold', fontSize: '11px', margin: '0 0 4px 0',
-       color: TH.textDark}),
+    titleRow,
     colorBar,
     ticks,
     note
   ], null, {
     position: 'bottom-right',
     padding: '8px 10px',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
     border: '1px solid ' + TH.border,
-    width: '260px'
+    width: '280px'
   });
 }
 var deltaLegend = buildDeltaLegend();
@@ -325,28 +436,40 @@ var L = {};  // хранилище ui.Map.Layer объектов
 function initLayers() {
   mapPanel.layers().reset();
 
-  // Wetland mask (из asset)
+  // Иерархия слоёв: ΔCH₄ — primary; остальные — muted context.
+  // Прозрачность и линии подобраны так, чтобы не перебивать ΔCH₄.
+
+  // Wetland mask — лёгкий контур поверх основного слоя
   L.wetland = ui.Map.Layer(
     assetLandcover.eq(1).selfMask(),
-    {palette: ['#00BCD4'], opacity: 0.45},
+    {palette: ['#00BCD4'], opacity: 0.28},
     'Wetland mask', cbWetland.getValue());
 
-  // Natural zones (из FC → image)
+  // Natural zones — muted fill, не конкурирует с ΔCH₄
   var zonesImg = WSP.reduceToImage({
     properties: ['ID'], reducer: ee.Reducer.first()
   });
   L.zones = ui.Map.Layer(zonesImg,
-    {min: 1, max: 8, palette: c.ZONE_PALETTE, opacity: 0.55},
+    {min: 1, max: 8, palette: c.ZONE_PALETTE, opacity: 0.38},
     'Natural zones', cbZones.getValue());
 
-  // Stations
-  L.muk   = ui.Map.Layer(c.MUKHRINO, {color: '#F59E0B'}, 'Mukhrino', cbStations.getValue());
-  L.bak   = ui.Map.Layer(c.BAKCHAR,  {color: '#DC2626'}, 'Bakchar',  cbStations.getValue());
-  L.zotto = ui.Map.Layer(c.ZOTTO,    {color: '#7C3AED'}, 'ZOTTO',    cbStations.getValue());
+  // Stations — явные маркеры, размер 8, белая обводка для видимости на любом фоне
+  L.muk   = ui.Map.Layer(
+    ee.FeatureCollection([c.MUKHRINO])
+      .style({color: 'white', fillColor: '#F59E0B', pointSize: 8, width: 2}),
+    {}, 'Mukhrino', cbStations.getValue());
+  L.bak   = ui.Map.Layer(
+    ee.FeatureCollection([c.BAKCHAR])
+      .style({color: 'white', fillColor: '#DC2626', pointSize: 8, width: 2}),
+    {}, 'Bakchar', cbStations.getValue());
+  L.zotto = ui.Map.Layer(
+    ee.FeatureCollection([c.ZOTTO])
+      .style({color: 'white', fillColor: '#7C3AED', pointSize: 8, width: 2}),
+    {}, 'ZOTTO', cbStations.getValue());
 
-  // Boundary
+  // Boundary — уверенная тонкая линия (primary context element)
   L.boundary = ui.Map.Layer(
-    WSP.style({color: 'white', fillColor: '00000000', width: 1.5}),
+    WSP.style({color: '#24292e', fillColor: '00000000', width: 2.0}),
     {}, 'WSP boundary', cbBoundary.getValue());
 
   // Delta CH4 — placeholder, заполнит updateDeltaLayer
@@ -362,27 +485,42 @@ function initLayers() {
   mapPanel.layers().set(6, L.boundary);
 }
 
+// Контекст текущего slice (для legend caption и Export-кнопки).
+// img заполняется ТОЛЬКО после валидации forest background.
+var currentDelta = {img: null, label: null, description: null};
+
+// Request token — защита от stale callback при быстром переключении period.
+// Каждый вызов updateDeltaLayer получает новый id; результат старого evaluate
+// игнорируется, если id больше не актуален.
+var deltaReqId = 0;
+
 /**
  * Пересчитать и обновить ТОЛЬКО ΔCH₄-слой (TROPOMI вычисление on-the-fly).
  */
 function updateDeltaLayer() {
   if (!L.delta) return;
   if (!cbDelta.getValue()) {
+    deltaReqId++;   // инвалидируем любой pending callback
     L.delta.setShown(false);
+    currentDelta = {img: null, label: null, description: null};
+    legendPeriodLabel.setValue('layer off');
     return;
   }
 
+  var reqId = ++deltaReqId;
   var type = typeSelect.getValue();
-  var filtered, label;
+  var filtered, label, description;
 
   if (type === 'Seasonal mean') {
     var m = parseInt(monthSelect.getValue(), 10);
     filtered = monthlyAll.filter(ee.Filter.eq('month', m));
-    label = MONTH_NAMES[m] + ' mean';
+    label = MONTH_NAMES[m] + ' \u00b7 mean 2019\u20132025';
+    description = MONTH_NAMES[m] + '_mean_2019_2025';
   } else if (type === 'Annual mean') {
     var y = parseInt(yearSelect.getValue(), 10);
     filtered = monthlyAll.filter(ee.Filter.eq('year', y));
-    label = y + ' (May\u2013Oct)';
+    label = y + ' \u00b7 May\u2013Oct mean';
+    description = y + '_MayOct_mean';
   } else {
     var y2 = parseInt(yearSelect.getValue(), 10);
     var m2 = parseInt(monthSelect.getValue(), 10);
@@ -390,7 +528,13 @@ function updateDeltaLayer() {
       .filter(ee.Filter.eq('year', y2))
       .filter(ee.Filter.eq('month', m2));
     label = MONTH_NAMES[m2] + ' ' + y2;
+    description = MONTH_NAMES[m2] + '_' + y2;
   }
+  // Sanitize description для Export task name (без пробелов, unicode и т.п.)
+  description = description.replace(/[^A-Za-z0-9_]/g, '_');
+
+  // Loading state
+  legendPeriodLabel.setValue('computing\u2026');
 
   var composite = filtered.mean().clip(FULL_AOI);
 
@@ -399,14 +543,31 @@ function updateDeltaLayer() {
     scale: 7000, maxPixels: 1e9, tileScale: 8
   }).get('xch4');
 
-  var deltaImg = composite
-    .subtract(ee.Image.constant(ee.Number(bg)))
-    .rename('delta_ch4').clip(FULL_AOI)
-    .updateMask(wetlandBinary);
+  // Валидируем bg и обновляем слой ТОЛЬКО если reqId ещё актуален.
+  // Это защищает от stale-callback (старый evaluate может вернуться
+  // после того, как пользователь уже переключил period).
+  ee.Number(bg).evaluate(function(bgVal, err) {
+    if (reqId !== deltaReqId) return;   // пользователь уже выбрал другой period
 
-  L.delta.setEeObject(deltaImg);
-  L.delta.setName('\u0394CH\u2084 \u2014 ' + label);
-  L.delta.setShown(true);
+    if (err || bgVal === null || bgVal === undefined) {
+      legendPeriodLabel.setValue('no valid TROPOMI data \u00b7 ' + label);
+      L.delta.setShown(false);
+      currentDelta = {img: null, label: null, description: null};
+      return;
+    }
+
+    var deltaImg = composite
+      .subtract(ee.Image.constant(bgVal))
+      .rename('delta_ch4').clip(FULL_AOI)
+      .updateMask(wetlandBinary);
+
+    currentDelta = {img: deltaImg, label: label, description: description};
+
+    L.delta.setEeObject(deltaImg);
+    L.delta.setName('\u0394CH\u2084 \u2014 ' + label);
+    L.delta.setShown(true);
+    legendPeriodLabel.setValue(label);
+  });
 }
 
 // ============================================================
@@ -430,11 +591,9 @@ function loadWSiberiaSummary() {
         wsEmissionLabel.setValue('Emission: —');
         return;
       }
-      var areaKm2 = Math.round(val / 1e6);
-      var fmt = areaKm2.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-      wsAreaLabel.setValue('Wetland area: ' + fmt + ' km\u00B2');
-      var emTg = (MEAN_FLUX * val * EMISSION_HOURS / 1e15).toFixed(2);
-      wsEmissionLabel.setValue('Emission: ~' + emTg + ' Tg CH\u2084/yr');
+      wsAreaLabel.setValue('Wetland area: ' + fmtArea(val / 1e6));
+      var emTg = MEAN_FLUX * val * EMISSION_HOURS / 1e15;
+      wsEmissionLabel.setValue('Emission: ' + fmtEmission(emTg));
     });
 
   // Mean ΔCH₄ — graceful fallback
@@ -445,7 +604,7 @@ function loadWSiberiaSummary() {
       return;
     }
     if (val !== null) {
-      wsDeltaLabel.setValue('Mean \u0394CH\u2084: ' + val.toFixed(1) + ' ppb');
+      wsDeltaLabel.setValue('Mean \u0394CH\u2084: ' + fmtDelta(val));
     }
   });
 }
@@ -627,14 +786,12 @@ function runCustomAnalysis() {
     customStatus.style().set('color', TH.success);
 
     if (d.wetArea !== null) {
-      var areaKm2 = Math.round(d.wetArea / 1e6);
-      var fmt = areaKm2.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-      customResultsPanel.add(ui.Label('Wetland area: ' + fmt + ' km\u00B2',
+      customResultsPanel.add(ui.Label('Wetland area: ' + fmtArea(d.wetArea / 1e6),
         {fontWeight: 'bold', fontSize: '12px'}));
     }
     if (d.meanDelta !== null) {
       customResultsPanel.add(ui.Label('Mean \u0394CH\u2084: ' +
-        d.meanDelta.toFixed(1) + ' ppb', {fontSize: '12px'}));
+        fmtDelta(d.meanDelta), {fontSize: '12px'}));
     }
   });
 
@@ -669,8 +826,10 @@ function runCustomAnalysis() {
 // K. Callbacks
 // ============================================================
 
-// При смене периода — автоматически включаем слой ΔCH₄, если выключен
+// При смене периода — автоматически включаем слой ΔCH₄, если выключен.
+// Мгновенно показываем caption "computing…" чтобы пользователь видел отклик.
 function ensureDeltaAndUpdate() {
+  legendPeriodLabel.setValue('computing\u2026');
   if (!cbDelta.getValue()) {
     cbDelta.setValue(true);   // триггерит cbDelta.onChange → updateDeltaLayer
   } else {
@@ -730,6 +889,7 @@ modeSelect.onChange(function(mode) {
 var leftPanel = ui.Panel({
   widgets: [
     titleLabel, subtitleLabel,
+    onboardingPanel,
     sectionLabel('Mode'),
     card([modeSelect]),
     wsSibPanel,
