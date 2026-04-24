@@ -563,7 +563,6 @@ function runCustomAnalysis() {
   customResultsPanel.clear();
 
   var wetMask = cgls.eq(90);
-  var forMask = cgls.gte(111).and(cgls.lte(126));
 
   var wetAreaNum = wetMask.multiply(ee.Image.pixelArea()).reduceRegion({
     reducer: ee.Reducer.sum(), geometry: customAOI,
@@ -574,6 +573,9 @@ function runCustomAnalysis() {
     customAOI, c.START_DATE, c.END_DATE
   ).map(function(img) { return ee.Image(img).clip(customAOI); });
 
+  // ΔCH₄ = XCH₄(болота в polygon) − XCH₄(лес всей ЗСР) для каждого месяца.
+  // Фон стабилен и одинаков для любого polygon — позволяет сравнивать участки
+  // в одной шкале «относительно регионального фона ЗСР».
   var seasonalFC = ee.FeatureCollection(
     ee.List(c.SUMMER_MONTHS).map(function(m) {
       var monthImgs = monthly.filter(ee.Filter.eq('month', m));
@@ -582,34 +584,33 @@ function runCustomAnalysis() {
         reducer: ee.Reducer.mean(), geometry: customAOI,
         scale: 7000, maxPixels: 1e9, tileScale: 8
       }).get('xch4');
-      var xFor = med.updateMask(forMask).reduceRegion({
-        reducer: ee.Reducer.mean(), geometry: customAOI,
-        scale: 7000, maxPixels: 1e9, tileScale: 8
-      }).get('xch4');
+      // WSP-wide forest background для этого месяца из seasonal_mean asset
+      var wspForest = ee.Number(
+        assetSeasonalMean.filter(ee.Filter.eq('month', m)).first().get('xch4_forest')
+      );
       return ee.Feature(null, {
         month: m,
         xch4_wetland: xWet,
-        xch4_forest: xFor,
+        xch4_forest_wsp: wspForest,
         delta_ch4: ee.Algorithms.If(
           ee.Algorithms.IsEqual(xWet, null), 0,
-          ee.Algorithms.If(ee.Algorithms.IsEqual(xFor, null), 0,
-            ee.Number(xWet).subtract(ee.Number(xFor))
-          )
+          ee.Number(xWet).subtract(wspForest)
         )
       });
     })
   );
 
+  // Карта ΔCH₄ июль — XCH₄ polygon минус WSP-wide forest для июля
   var julyMed = monthly.filter(ee.Filter.eq('month', 7)).mean();
-  var bgFor = julyMed.updateMask(forMask).reduceRegion({
-    reducer: ee.Reducer.mean(), geometry: customAOI,
-    scale: 7000, maxPixels: 1e9, tileScale: 8
-  }).get('xch4');
+  var julyWspForest = ee.Number(
+    assetSeasonalMean.filter(ee.Filter.eq('month', 7)).first().get('xch4_forest')
+  );
   var deltaCustom = julyMed
-    .subtract(ee.Image.constant(ee.Number(bgFor)))
+    .subtract(ee.Image.constant(julyWspForest))
     .rename('delta_ch4').clip(customAOI);
 
-  mapPanel.addLayer(deltaCustom, deltaVis, 'Custom \u0394CH\u2084 July');
+  mapPanel.addLayer(deltaCustom, deltaVis,
+    'Custom \u0394CH\u2084 July (vs WSP forest)');
   mapPanel.addLayer(wetMask.selfMask().clip(customAOI),
     {palette: ['#00BCD4'], opacity: 0.35}, 'Custom wetlands');
 
@@ -638,15 +639,17 @@ function runCustomAnalysis() {
   });
 
   var chart1 = ui.Chart.feature.byFeature(seasonalFC, 'month',
-      ['xch4_wetland', 'xch4_forest'])
+      ['xch4_wetland', 'xch4_forest_wsp'])
     .setChartType('LineChart')
     .setOptions({
-      title: 'Custom AOI: XCH\u2084 wetlands vs forests',
+      title: 'Custom AOI: XCH\u2084 wetlands (polygon) vs WSP forest background',
       hAxis: {title: 'Month', ticks: [5,6,7,8,9,10]},
       vAxis: {title: 'XCH\u2084 (ppb)'},
       series: {
-        0: {color: '#0891b2', lineWidth: 2, pointSize: 5, labelInLegend: 'Wetlands'},
-        1: {color: '#16a34a', lineWidth: 2, pointSize: 5, labelInLegend: 'Forests'}
+        0: {color: '#0891b2', lineWidth: 2, pointSize: 5,
+            labelInLegend: 'Wetlands (polygon)'},
+        1: {color: '#16a34a', lineWidth: 2, pointSize: 5,
+            labelInLegend: 'Forests (WSP-wide)'}
       }
     });
   customResultsPanel.add(chart1);
@@ -714,7 +717,7 @@ modeSelect.onChange(function(mode) {
     customPanel.style().set('shown', true);
     drawingTools.setShown(true);
     drawingTools.setShape('polygon');
-    deltaLegend.style().set('shown', false);
+    deltaLegend.style().set('shown', true);
     customStatus.setValue('Draw a polygon on the map, then press Run.');
     customStatus.style().set('color', TH.textMuted);
   }
