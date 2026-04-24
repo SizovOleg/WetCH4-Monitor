@@ -611,6 +611,10 @@ var currentDelta = {img: null, label: null, description: null};
 // игнорируется, если id больше не актуален.
 var deltaReqId = 0;
 
+// Отдельный anti-stale token для pixel inspector (Map.onClick),
+// чтобы быстрые последовательные клики не портили друг другу UI.
+var inspectReqId = 0;
+
 /**
  * Пересчитать и обновить ТОЛЬКО ΔCH₄-слой (TROPOMI вычисление on-the-fly).
  */
@@ -982,6 +986,7 @@ function runCustomAnalysis() {
 function ensureDeltaAndUpdate() {
   legendPeriodLabel.setValue('computing\u2026');
   // Soft reset: old inspector value no longer matches new slice
+  inspectReqId++;   // инвалидируем любой pending inspector-callback
   if (L.clickMarker) L.clickMarker.setShown(false);
   clearInspector('Layer changed \u2014 click the map to inspect the new slice.');
   if (!cbDelta.getValue()) {
@@ -1032,69 +1037,88 @@ var STATION_COORDS = [
 ];
 
 mapPanel.onClick(function(coords) {
+  var reqId = ++inspectReqId;
   var lat = coords.lat, lon = coords.lon;
   var pt = ee.Geometry.Point([lon, lat]);
 
   // Визуальный маркер в точке клика
   L.clickMarker.setEeObject(
     ee.FeatureCollection([ee.Feature(pt)])
-      .style({color: 'black', fillColor: 'FFEB3B', pointSize: 10, width: 2}));
+      .style({color: 'black', fillColor: '#FFEB3B', pointSize: 10, width: 2}));
   L.clickMarker.setShown(true);
 
   // Координаты — сразу (клиентская операция)
   inspectorHintLabel.setValue('\u2713 Inspected point');
   inspectorCoordsLabel.setValue(
     'Lat ' + lat.toFixed(3) + '\u00B0, Lon ' + lon.toFixed(3) + '\u00B0');
-  inspectorDeltaLabel.setValue('\u0394CH\u2084: loading\u2026');
+  inspectorDeltaLabel.setValue('\u0394CH\u2084 (7-km cell): loading\u2026');
   inspectorLandcoverLabel.setValue('Land cover: loading\u2026');
   inspectorZoneLabel.setValue('Zone: loading\u2026');
 
-  // Nearest station — сразу (клиентская Haversine)
-  var nearest = null, minDist = Infinity;
-  STATION_COORDS.forEach(function(s) {
-    var d = haversineKm(lat, lon, s.lat, s.lon);
-    if (d < minDist) { minDist = d; nearest = s; }
-  });
-  inspectorStationLabel.setValue(
-    'Nearest station: ' + nearest.name +
-    ' (' + Math.round(minDist) + ' km)');
+  // Nearest station — сразу (клиентская Haversine). Fallback если список пуст.
+  if (STATION_COORDS && STATION_COORDS.length > 0) {
+    var nearest = null, minDist = Infinity;
+    STATION_COORDS.forEach(function(s) {
+      var d = haversineKm(lat, lon, s.lat, s.lon);
+      if (d < minDist) { minDist = d; nearest = s; }
+    });
+    inspectorStationLabel.setValue(
+      'Nearest station: ' + nearest.name +
+      ' (' + Math.round(minDist) + ' km)');
+  } else {
+    inspectorStationLabel.setValue('');
+  }
 
-  // ΔCH₄ — из текущего layer (async)
+  // ΔCH₄ — из текущего layer (async, с токеном от stale).
+  // Label честно называет "7-km cell" — это neighborhood mean,
+  // не pixel-value (TROPOMI нативное разрешение ~7 км).
   if (currentDelta.img) {
     currentDelta.img.reduceRegion({
       reducer: ee.Reducer.mean(),
       geometry: pt.buffer(3500),
       scale: 7000, maxPixels: 1e6, bestEffort: true
     }).get('delta_ch4').evaluate(function(v, err) {
+      if (reqId !== inspectReqId) return;   // пользователь успел кликнуть ещё раз
       if (err || v === null || v === undefined) {
-        inspectorDeltaLabel.setValue('\u0394CH\u2084: no data at this pixel');
+        inspectorDeltaLabel.setValue('\u0394CH\u2084 (7-km cell): no data');
       } else {
-        inspectorDeltaLabel.setValue('\u0394CH\u2084: ' + fmtDelta(v));
+        inspectorDeltaLabel.setValue('\u0394CH\u2084 (7-km cell): ' + fmtDelta(v));
       }
     });
   } else {
     inspectorDeltaLabel.setValue('\u0394CH\u2084: layer not loaded');
   }
 
-  // Land cover (CGLS 100 m)
+  // Land cover (CGLS 100 m) — sample один пиксель, без буфера
   cgls.reduceRegion({
     reducer: ee.Reducer.first(),
     geometry: pt, scale: 100
   }).get('discrete_classification').evaluate(function(code, err) {
+    if (reqId !== inspectReqId) return;   // stale
     if (err || code === null || code === undefined) {
-      inspectorLandcoverLabel.setValue('Land cover: —');
+      inspectorLandcoverLabel.setValue('Land cover: \u2014');
     } else {
       inspectorLandcoverLabel.setValue(
         'Land cover: ' + cglsLabel(code) + ' (CGLS ' + code + ')');
     }
   });
 
-  // Natural zone (WSP)
-  WSP.filterBounds(pt).first().get('ID').evaluate(function(id, err) {
+  // Natural zone (WSP) — безопасная проверка через ee.Algorithms.If,
+  // чтобы .first() на пустой коллекции не падал с server error.
+  var hits = WSP.filterBounds(pt);
+  var zoneId = ee.Algorithms.If(
+    hits.size().gt(0),
+    ee.Feature(hits.first()).get('ID'),
+    null
+  );
+  ee.List([zoneId]).evaluate(function(list, err) {
+    if (reqId !== inspectReqId) return;   // stale
+    var id = list ? list[0] : null;
     if (err || id === null || id === undefined) {
       inspectorZoneLabel.setValue('Zone: outside WSP');
     } else {
-      inspectorZoneLabel.setValue('Zone: ' + ZONE_NAMES[id] + ' (ID ' + id + ')');
+      var name = ZONE_NAMES[id] || ('Zone ' + id);
+      inspectorZoneLabel.setValue('Zone: ' + name + ' (ID ' + id + ')');
     }
   });
 });
