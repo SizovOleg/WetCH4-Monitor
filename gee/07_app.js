@@ -52,9 +52,17 @@ var monthlyAll = tropomiModule.buildMonthlyCollection(
 // D. Visualization params
 // ============================================================
 
-var DELTA_MIN = -5;
-var DELTA_MAX = 15;
-var deltaVis = {min: DELTA_MIN, max: DELTA_MAX, palette: palettes.DELTA_CH4_PALETTE};
+// Две фиксированные шкалы ΔCH₄ — по coverage mode.
+// Симметричные относительно 0, чтобы белый цвет diverging-палитры
+// точно соответствовал «нулевому» превышению.
+var DELTA_RANGES = {
+  wetlands: {min: -5,  max: 15,  ticks: ['\u22125',  '0', '+5',  '+10', '+15']},
+  full:     {min: -30, max: 30,  ticks: ['\u221230', '\u221215', '0', '+15', '+30']}
+};
+// deltaVis — default (wetlands), обновляется в updateDeltaLayer
+var deltaVis = {min: DELTA_RANGES.wetlands.min,
+                max: DELTA_RANGES.wetlands.max,
+                palette: palettes.DELTA_CH4_PALETTE};
 var lcVis = {min: 0, max: 3, palette: palettes.LANDCOVER_PALETTE};
 
 var MEAN_FLUX = 3.035;
@@ -352,6 +360,30 @@ var legendPeriodLabel = ui.Label('computing\u2026',
   {fontSize: '10px', color: TH.textMuted, margin: '0 0 4px 0',
    textAlign: 'right', stretch: 'horizontal'});
 
+// Tick labels легенды — переменные, обновляются при смене coverage
+function tickLabel(text, bold) {
+  return ui.Label(text, {
+    fontSize: '10px', margin: '3px 0 0 0',
+    color: bold ? TH.textDark : TH.textMuted,
+    fontWeight: bold ? 'bold' : 'normal',
+    textAlign: 'center', stretch: 'horizontal', padding: '0'
+  });
+}
+var legendTickLabels = [
+  tickLabel('\u22125', false),
+  tickLabel('0', true),          // центр — bold
+  tickLabel('+5', false),
+  tickLabel('+10', false),
+  tickLabel('+15', false)
+];
+
+// Обновить tick labels под новый диапазон (после смены coverage)
+function updateLegendTicks(rng) {
+  for (var i = 0; i < 5; i++) {
+    legendTickLabels[i].setValue(rng.ticks[i]);
+  }
+}
+
 // Color legend для ΔCH₄ (bottom-right) — плавный градиент + 5 тиков + 0
 function buildDeltaLegend() {
   var colorBar = ui.Thumbnail({
@@ -366,23 +398,7 @@ function buildDeltaLegend() {
     style: {stretch: 'horizontal', margin: '0', maxHeight: '14px'}
   });
 
-  // 5 делений: -5, 0, +5, +10, +15 (равномерно по шкале -5...15)
-  // Пять подписей равной ширины, чтобы числа встали под соответствующими долями bar-а
-  function tickLabel(text, bold) {
-    return ui.Label(text, {
-      fontSize: '10px', margin: '3px 0 0 0',
-      color: bold ? TH.textDark : TH.textMuted,
-      fontWeight: bold ? 'bold' : 'normal',
-      textAlign: 'center', stretch: 'horizontal', padding: '0'
-    });
-  }
-  var ticks = ui.Panel([
-    tickLabel('\u22125', false),   // −5
-    tickLabel('0', true),          // 0 — жирный
-    tickLabel('+5', false),
-    tickLabel('+10', false),
-    tickLabel('+15', false)
-  ], ui.Panel.Layout.flow('horizontal'));
+  var ticks = ui.Panel(legendTickLabels, ui.Panel.Layout.flow('horizontal'));
 
   var note = ui.Label(
     'blue \u00b7 below background    red \u00b7 wetland emission',
@@ -589,6 +605,12 @@ function updateDeltaLayer() {
       : deltaBase;
 
     currentDelta = {img: deltaImg, label: label, description: description};
+
+    // Применяем диапазон ΔCH₄ под coverage: wetlands (-5..15) / full (-30..30)
+    var rng = DELTA_RANGES[coverage];
+    L.delta.setVisParams({min: rng.min, max: rng.max,
+                          palette: palettes.DELTA_CH4_PALETTE});
+    updateLegendTicks(rng);
 
     L.delta.setEeObject(deltaImg);
     L.delta.setName('\u0394CH\u2084 \u2014 ' + label);
