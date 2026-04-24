@@ -52,12 +52,20 @@ var monthlyAll = tropomiModule.buildMonthlyCollection(
 // D. Visualization params
 // ============================================================
 
-// Две фиксированные шкалы ΔCH₄ — по coverage mode.
-// Симметричные относительно 0, чтобы белый цвет diverging-палитры
-// точно соответствовал «нулевому» превышению.
+// Три фиксированные шкалы ΔCH₄ — по coverage × temporal aggregation.
+// Все симметричные относительно 0 для корректной работы diverging-палитры.
+//
+//   wetlands         → узкий диапазон (-5..+15), подходит для статьи
+//   full_monthly     → широкий (-30..+30), покрывает месячные full-land slice
+//   full_aggregated  → средний (-15..+15), для seasonal/annual full-land
+//                       (шум усредняется, реальный диапазон сжимается)
 var DELTA_RANGES = {
-  wetlands: {min: -5,  max: 15,  ticks: ['\u22125',  '0', '+5',  '+10', '+15']},
-  full:     {min: -30, max: 30,  ticks: ['\u221230', '\u221215', '0', '+15', '+30']}
+  wetlands:        {min: -5,  max: 15,
+                    ticks: ['\u22125',  '0', '+5',  '+10', '+15']},
+  full_monthly:    {min: -30, max: 30,
+                    ticks: ['\u221230', '\u221215', '0', '+15', '+30']},
+  full_aggregated: {min: -15, max: 15,
+                    ticks: ['\u221215', '\u22127', '0', '+7', '+15']}
 };
 // deltaVis — default (wetlands), обновляется в updateDeltaLayer
 var deltaVis = {min: DELTA_RANGES.wetlands.min,
@@ -400,8 +408,19 @@ function buildDeltaLegend() {
 
   var ticks = ui.Panel(legendTickLabels, ui.Panel.Layout.flow('horizontal'));
 
+  // Маркер нуля ровно под центром colorbar — усиливает точку "нет превышения"
+  var zeroMarkerRow = ui.Panel([
+    ui.Label('', {stretch: 'horizontal', margin: '0'}),
+    ui.Label('', {stretch: 'horizontal', margin: '0'}),
+    ui.Label('\u25BC', {fontSize: '9px', color: TH.textDark,
+      margin: '-2px 0 0 0', textAlign: 'center', stretch: 'horizontal'}),
+    ui.Label('', {stretch: 'horizontal', margin: '0'}),
+    ui.Label('', {stretch: 'horizontal', margin: '0'})
+  ], ui.Panel.Layout.flow('horizontal'), {margin: '0'});
+
+  // Нейтральная подпись — работает и для 'wetlands only', и для 'full land'
   var note = ui.Label(
-    'blue \u00b7 below background    red \u00b7 wetland emission',
+    'blue \u00b7 below baseline    red \u00b7 above baseline',
     {fontSize: '9px', color: TH.textMuted, margin: '4px 0 0 0',
      textAlign: 'center', stretch: 'horizontal'});
 
@@ -415,6 +434,7 @@ function buildDeltaLegend() {
   return ui.Panel([
     titleRow,
     colorBar,
+    zeroMarkerRow,
     ticks,
     note
   ], null, {
@@ -606,8 +626,19 @@ function updateDeltaLayer() {
 
     currentDelta = {img: deltaImg, label: label, description: description};
 
-    // Применяем диапазон ΔCH₄ под coverage: wetlands (-5..15) / full (-30..30)
-    var rng = DELTA_RANGES[coverage];
+    // Диапазон ΔCH₄ зависит от coverage И типа временного разреза.
+    //   wetlands → узкий -5..15 (фокус статьи)
+    //   full + Individual month → широкий -30..30 (большие колебания)
+    //   full + Seasonal/Annual mean → средний -15..15 (усреднение сжимает)
+    var rngKey;
+    if (coverage === 'wetlands') {
+      rngKey = 'wetlands';
+    } else if (type === 'Individual month') {
+      rngKey = 'full_monthly';
+    } else {
+      rngKey = 'full_aggregated';
+    }
+    var rng = DELTA_RANGES[rngKey];
     L.delta.setVisParams({min: rng.min, max: rng.max,
                           palette: palettes.DELTA_CH4_PALETTE});
     updateLegendTicks(rng);
