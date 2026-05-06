@@ -71,3 +71,9 @@ screenshots/
 # Early CSV exports (superseded by article/data/article_t*.csv)
 wetch4_zonal_statistics_8zones*.csv
 wetch4_zonal_seasonal.csv
+
+# Reference PDFs (downloaded locally, IPCC AR6 ~404 MB)
+references/
+
+# Final submission package (Сизов-...)
+article/!Отправка/
