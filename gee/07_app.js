@@ -34,6 +34,10 @@ var assetEnhancement     = ee.FeatureCollection(ROOT + 'enhancement_full');
 var assetZonalStats      = ee.FeatureCollection(ROOT + 'zonal_stats');
 var assetZonalSeasonal   = ee.FeatureCollection(ROOT + 'zonal_seasonal');
 var assetStations        = ee.FeatureCollection(ROOT + 'stations');
+// Опциональный asset с годовой резолюцией по зонам (для SE в charts 3-4).
+// Создаётся отдельным модулем 10c_t8_zonal_yearly.js. Если отсутствует —
+// charts 3-4 рисуются без интервалов (graceful fallback).
+var assetZonalSeasonalYr = ee.FeatureCollection(ROOT + 'zonal_seasonal_yearly');
 var WSP                  = c.WSP;
 
 // ============================================================
@@ -778,78 +782,231 @@ function loadWSiberiaCharts() {
     }
 
     // Chart 1: Seasonal ΔCH₄ (bar)
-    var chart1 = ui.Chart.feature.byFeature(assetSeasonalMean, 'month', 'delta_ch4')
-      .setChartType('ColumnChart')
-      .setOptions({
-        title: 'Seasonal \u0394CH\u2084 (2019\u20132025)',
-        hAxis: {title: 'Month', ticks: [5,6,7,8,9,10]},
-        vAxis: {title: '\u0394CH\u2084 (ppb)'},
-        colors: ['#1f6feb'], legend: 'none',
-        chartArea: {left: 48, top: 30, right: 16, bottom: 40}
+    // Charts 1 & 2: \u0394CH\u2084 (bar) and XCH\u2084 wet/forest (line) with SE intervals.
+    // Compute seasonal mean+SE per month from assetEnhancement (yearly \u00d7 monthly).
+    // \u0394CH\u2084 \u2014 \u0431\u0435\u0437 \u0434\u0435\u0442\u0440\u0435\u043d\u0434\u0438\u043d\u0433\u0430 (\u0442\u0440\u0435\u043d\u0434 \u0433\u0430\u0441\u0438\u0442\u0441\u044f \u043f\u0440\u0438 \u0432\u044b\u0447\u0438\u0442\u0430\u043d\u0438\u0438 wet\u2212forest).
+    // XCH\u2084 wet/forest \u2014 \u0434\u0435\u0442\u0440\u0435\u043d\u0434\u0438\u043d\u0433 \u043b\u0438\u043d\u0435\u0439\u043d\u043e\u0439 \u0440\u0435\u0433\u0440\u0435\u0441\u0441\u0438\u0435\u0439 year \u0432\u043d\u0443\u0442\u0440\u0438 \u043c\u0435\u0441\u044f\u0446\u0430,
+    // \u0447\u0442\u043e\u0431\u044b SE \u043e\u0442\u0440\u0430\u0436\u0430\u043b\u0430 \u043c\u0435\u0436\u0433\u043e\u0434\u043e\u0432\u0443\u044e \u0432\u0430\u0440\u0438\u0430\u0431\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c, \u0430 \u043d\u0435 \u0433\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u044b\u0439 \u0440\u043e\u0441\u0442 CH\u2084.
+    var months = ee.List([5, 6, 7, 8, 9, 10]);
+    var seasonalSE = ee.FeatureCollection(months.map(function (m) {
+      var monthFC = assetEnhancement.filter(ee.Filter.eq('month', m));
+      var n = monthFC.size();
+      var dMean = monthFC.aggregate_mean('delta_ch4');
+      var dSd   = monthFC.aggregate_total_sd('delta_ch4');
+      var dSe   = ee.Number(dSd).divide(ee.Number(n).sqrt());
+      return ee.Feature(ee.Geometry.Point([0, 0]), {
+        month:        m,
+        n:            n,
+        delta_ch4:    dMean,
+        delta_se:     dSe,
+        xch4_wetland: monthFC.aggregate_mean('xch4_wetland'),
+        xch4_forest:  monthFC.aggregate_mean('xch4_forest'),
+        years:        monthFC.aggregate_array('year'),
+        w_vals:       monthFC.aggregate_array('xch4_wetland'),
+        f_vals:       monthFC.aggregate_array('xch4_forest')
       });
-    wsChartPanel1.clear();
-    wsChartPanel1.add(chart1);
+    }));
 
-    // Chart 2: XCH₄ wet vs forest
-    var chart2 = ui.Chart.feature.byFeature(assetSeasonalMean, 'month',
-        ['xch4_wetland', 'xch4_forest'])
-      .setChartType('LineChart')
-      .setOptions({
-        title: 'XCH\u2084: wetlands vs forests',
-        hAxis: {title: 'Month', ticks: [5,6,7,8,9,10]},
-        vAxis: {title: 'XCH\u2084 (ppb)'},
-        series: {
-          0: {color: '#0891b2', lineWidth: 2, pointSize: 5, labelInLegend: 'Wetlands'},
-          1: {color: '#16a34a', lineWidth: 2, pointSize: 5, labelInLegend: 'Forests'}
-        },
-        chartArea: {left: 48, top: 30, right: 16, bottom: 40}
+    seasonalSE.evaluate(function (fc, err) {
+      if (err) {
+        wsChartPanel1.clear();
+        wsChartPanel1.add(ui.Label('\u26a0 SE compute failed: ' + err,
+          {color: TH.danger, fontSize: '11px', padding: '8px'}));
+        return;
+      }
+
+      // \u041b\u0438\u043d\u0435\u0439\u043d\u044b\u0439 \u0434\u0435\u0442\u0440\u0435\u043d\u0434\u0438\u043d\u0433 \u043d\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u0435: SE \u043e\u0441\u0442\u0430\u0442\u043a\u043e\u0432 \u043e\u0442 \u0440\u0435\u0433\u0440\u0435\u0441\u0441\u0438\u0438 val ~ year.
+      function detrendSE(years, vals) {
+        var n = years.length;
+        if (n < 2) return 0;
+        var meanY = years.reduce(function (a, b) { return a + b; }, 0) / n;
+        var meanV = vals.reduce(function (a, b) { return a + b; }, 0) / n;
+        var num = 0, den = 0;
+        for (var i = 0; i < n; i++) {
+          num += (years[i] - meanY) * (vals[i] - meanV);
+          den += (years[i] - meanY) * (years[i] - meanY);
+        }
+        var b = den > 0 ? num / den : 0;
+        var a = meanV - b * meanY;
+        var ss = 0;
+        for (var j = 0; j < n; j++) {
+          var r = vals[j] - (a + b * years[j]);
+          ss += r * r;
+        }
+        var sd = Math.sqrt(ss / (n - 1));
+        return sd / Math.sqrt(n);
+      }
+
+      // DataTable: ColumnChart (Chart 1) \u2014 error sticks \u0447\u0435\u0440\u0435\u0437 role 'interval'
+      var data1 = [[
+        'Month',
+        '\u0394CH\u2084',
+        {role: 'interval'}, {role: 'interval'}
+      ]];
+      // DataTable: LineChart (Chart 2) \u2014 shaded interval bands per series
+      var data2 = [[
+        'Month',
+        'Wetlands',
+        {role: 'interval'}, {role: 'interval'},
+        'Forests',
+        {role: 'interval'}, {role: 'interval'}
+      ]];
+
+      fc.features.forEach(function (f) {
+        var p   = f.properties;
+        var dse = p.delta_se || 0;
+        var wse = detrendSE(p.years, p.w_vals);
+        var fse = detrendSE(p.years, p.f_vals);
+        data1.push([
+          String(p.month),
+          p.delta_ch4,
+          p.delta_ch4 - dse,
+          p.delta_ch4 + dse
+        ]);
+        data2.push([
+          String(p.month),
+          p.xch4_wetland, p.xch4_wetland - wse, p.xch4_wetland + wse,
+          p.xch4_forest,  p.xch4_forest  - fse, p.xch4_forest  + fse
+        ]);
       });
-    wsChartPanel2.clear();
-    wsChartPanel2.add(chart2);
+
+      var chart1 = ui.Chart(data1)
+        .setChartType('ColumnChart')
+        .setOptions({
+          title: 'Seasonal \u0394CH\u2084 (2019\u20132025) \u00b1 SE',
+          hAxis: {title: 'Month'},
+          vAxis: {title: '\u0394CH\u2084 (ppb)', baseline: 0},
+          colors: ['#1f6feb'], legend: 'none',
+          intervals: {style: 'sticks', color: '#333', lineWidth: 1.2},
+          chartArea: {left: 48, top: 30, right: 16, bottom: 40}
+        });
+      wsChartPanel1.clear();
+      wsChartPanel1.add(chart1);
+
+      var chart2 = ui.Chart(data2)
+        .setChartType('LineChart')
+        .setOptions({
+          title: 'XCH\u2084: wetlands vs forests \u00b1 SE (detrended)',
+          hAxis: {title: 'Month'},
+          vAxis: {title: 'XCH\u2084 (ppb)'},
+          series: {
+            0: {color: '#0891b2', lineWidth: 2, pointSize: 5,
+                labelInLegend: 'Wetlands'},
+            1: {color: '#16a34a', lineWidth: 2, pointSize: 5,
+                labelInLegend: 'Forests'}
+          },
+          intervals: {style: 'area', color: 'series-color', fillOpacity: 0.20},
+          chartArea: {left: 48, top: 30, right: 16, bottom: 40}
+        });
+      wsChartPanel2.clear();
+      wsChartPanel2.add(chart2);
+    });
   });
 
   // Chart 3: Zonal ΔCH₄ (bar)
-  assetZonalStats.size().evaluate(function(size, err) {
-    if (err || size === null || size === 0) {
-      wsChartPanel3.clear();
-      wsChartPanel3.add(ui.Label('\u26A0 "zonal_stats" missing',
-        {color: TH.danger, fontSize: '11px', padding: '8px'}));
-      return;
-    }
-    var chart3 = ui.Chart.feature.byFeature(
-        assetZonalStats.sort('zone_id'), 'zone_name', 'delta_ch4_ppb')
-      .setChartType('ColumnChart')
-      .setOptions({
-        title: '\u0394CH\u2084 by natural zone',
-        hAxis: {slantedText: true, slantedTextAngle: 35},
-        vAxis: {title: '\u0394CH\u2084 (ppb)', baseline: 0},
-        colors: ['#c8321e'], legend: 'none',
-        chartArea: {left: 48, top: 30, right: 16, bottom: 70}
-      });
-    wsChartPanel3.clear();
-    wsChartPanel3.add(chart3);
-  });
+  // \u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A SE \u2014 assetZonalSeasonalYr (zone \u00D7 year \u00D7 month). \u0415\u0441\u043B\u0438 asset
+  // \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u2014 fallback \u043D\u0430 \u0441\u0442\u0430\u0440\u043E\u0435 \u043F\u043E\u0432\u0435\u0434\u0435\u043D\u0438\u0435 \u0431\u0435\u0437 \u0438\u043D\u0442\u0435\u0440\u0432\u0430\u043B\u043E\u0432.
+  assetZonalSeasonalYr.size().evaluate(function (yrSize, yrErr) {
+    var hasYr = !yrErr && yrSize && yrSize > 0;
 
-  // Chart 4 (NEW): Seasonal ΔCH₄ by zone
-  assetZonalSeasonal.size().evaluate(function(size, err) {
-    if (err || size === null || size === 0) {
-      wsChartPanel4.clear();
-      wsChartPanel4.add(ui.Label('\u26A0 "zonal_seasonal" missing',
-        {color: TH.danger, fontSize: '11px', padding: '8px'}));
-      return;
-    }
-    var chart4 = ui.Chart.feature.groups(
-        assetZonalSeasonal, 'month', 'delta_ch4', 'zone_name')
-      .setChartType('LineChart')
-      .setOptions({
-        title: 'Seasonal \u0394CH\u2084 by zone',
-        hAxis: {title: 'Month', ticks: [5,6,7,8,9,10]},
-        vAxis: {title: '\u0394CH\u2084 (ppb)', baseline: 0},
-        interpolateNulls: true,
-        chartArea: {left: 48, top: 30, right: 16, bottom: 40}
+    // ===== Chart 3: \u0394CH\u2084 \u043F\u043E \u0437\u043E\u043D\u0430\u043C =====
+    assetZonalStats.size().evaluate(function (size, err) {
+      if (err || size === null || size === 0) {
+        wsChartPanel3.clear();
+        wsChartPanel3.add(ui.Label('\u26A0 "zonal_stats" missing',
+          {color: TH.danger, fontSize: '11px', padding: '8px'}));
+        return;
+      }
+      if (!hasYr) {
+        var chart3 = ui.Chart.feature.byFeature(
+            assetZonalStats.sort('zone_id'), 'zone_name', 'delta_ch4_ppb')
+          .setChartType('ColumnChart')
+          .setOptions({
+            title: '\u0394CH\u2084 by natural zone',
+            hAxis: {slantedText: true, slantedTextAngle: 35},
+            vAxis: {title: '\u0394CH\u2084 (ppb)', baseline: 0},
+            colors: ['#c8321e'], legend: 'none',
+            chartArea: {left: 48, top: 30, right: 16, bottom: 70}
+          });
+        wsChartPanel3.clear();
+        wsChartPanel3.add(chart3);
+        return;
+      }
+
+      // Server-side: \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0437\u043E\u043D\u044B \u2014 \u0433\u043E\u0434 \u00D7 \u0441\u0440\u0435\u0434\u043D\u0435\u0435 \u0394CH\u2084 \u0437\u0430 \u0442\u0451\u043F\u043B\u044B\u0439 \u0441\u0435\u0437\u043E\u043D,
+      // \u0437\u0430\u0442\u0435\u043C SE \u043F\u043E 7 \u0433\u043E\u0434\u0430\u043C.
+      var zoneStats = assetZonalStats.sort('zone_id').map(function (z) {
+        var zid = z.get('zone_id');
+        var yearly = assetZonalSeasonalYr.filter(ee.Filter.eq('zone_id', zid));
+        var byYear = ee.FeatureCollection(
+          ee.List.sequence(2019, 2025).map(function (y) {
+            var sub = yearly.filter(ee.Filter.eq('year', y));
+            return ee.Feature(null, {
+              year: y,
+              delta_warm: sub.aggregate_mean('delta_ch4')
+            });
+          })
+        ).filter(ee.Filter.notNull(['delta_warm']));
+        var n  = byYear.size();
+        var sd = byYear.aggregate_total_sd('delta_warm');
+        var se = ee.Number(sd).divide(ee.Number(n).sqrt());
+        return z.set('delta_se',
+                     ee.Algorithms.If(n.gt(1), se, 0));
       });
-    wsChartPanel4.clear();
-    wsChartPanel4.add(chart4);
+
+      zoneStats.evaluate(function (fcZ, errZ) {
+        if (errZ) {
+          wsChartPanel3.clear();
+          wsChartPanel3.add(ui.Label('\u26A0 Zonal SE failed: ' + errZ,
+            {color: TH.danger, fontSize: '11px', padding: '8px'}));
+          return;
+        }
+        var data3 = [['Zone', '\u0394CH\u2084',
+                      {role: 'interval'}, {role: 'interval'}]];
+        fcZ.features.forEach(function (f) {
+          var p   = f.properties;
+          var v   = p.delta_ch4_ppb;
+          var se  = p.delta_se || 0;
+          data3.push([String(p.zone_name), v, v - se, v + se]);
+        });
+        var chart3 = ui.Chart(data3)
+          .setChartType('ColumnChart')
+          .setOptions({
+            title: '\u0394CH\u2084 by natural zone \u00B1 SE',
+            hAxis: {slantedText: true, slantedTextAngle: 35},
+            vAxis: {title: '\u0394CH\u2084 (ppb)', baseline: 0},
+            colors: ['#c8321e'], legend: 'none',
+            intervals: {style: 'sticks', color: '#333', lineWidth: 1.0},
+            chartArea: {left: 48, top: 30, right: 16, bottom: 70}
+          });
+        wsChartPanel3.clear();
+        wsChartPanel3.add(chart3);
+      });
+    });
+
+
+    // ===== Chart 4: \u0421\u0435\u0437\u043E\u043D\u043D\u044B\u0439 \u0445\u043E\u0434 \u0394CH\u2084 \u043F\u043E \u0437\u043E\u043D\u0430\u043C =====
+    // Multi-line chart \u0441 SE \u0432\u0438\u0437\u0443\u0430\u043B\u044C\u043D\u043E \u043F\u0435\u0440\u0435\u0433\u0440\u0443\u0436\u0430\u0435\u0442 \u043A\u0430\u0440\u0442\u0438\u043D\u043A\u0443 \u2014 \u043E\u0441\u0442\u0430\u0432\u043B\u044F\u0435\u043C \u0447\u0438\u0441\u0442\u044B\u043C.
+    assetZonalSeasonal.size().evaluate(function (size, err) {
+      if (err || size === null || size === 0) {
+        wsChartPanel4.clear();
+        wsChartPanel4.add(ui.Label('\u26A0 "zonal_seasonal" missing',
+          {color: TH.danger, fontSize: '11px', padding: '8px'}));
+        return;
+      }
+      var chart4 = ui.Chart.feature.groups(
+          assetZonalSeasonal, 'month', 'delta_ch4', 'zone_name')
+        .setChartType('LineChart')
+        .setOptions({
+          title: 'Seasonal \u0394CH\u2084 by zone',
+          hAxis: {title: 'Month', ticks: [5,6,7,8,9,10]},
+          vAxis: {title: '\u0394CH\u2084 (ppb)', baseline: 0},
+          interpolateNulls: true,
+          chartArea: {left: 48, top: 30, right: 16, bottom: 40}
+        });
+      wsChartPanel4.clear();
+      wsChartPanel4.add(chart4);
+    });
   });
 }
 

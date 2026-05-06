@@ -65,6 +65,41 @@ t2 <- read_csv(file.path(data_dir, "article_t2_zonal_seasonal.csv"),
          zone_label = factor(zone_ru[as.character(zone_name)],
                               levels = unname(zone_ru)))
 
+# Подмешиваем межгодовые SE из T8 (если доступен — после запуска
+# gee/10c_t8_zonal_yearly.js). ΔCH4 — детрендинг внутри (zone × month);
+# делим SD остатков на √n_лет.
+t8_path <- file.path(data_dir, "article_t8_zonal_yearly_monthly.csv")
+if (file.exists(t8_path)) {
+  t8 <- read_csv(t8_path, show_col_types = FALSE) |>
+    filter(!is.na(delta_ch4))
+  t8_dt <- t8 |>
+    group_by(zone_name, month) |>
+    mutate(
+      n_yr      = n(),
+      delta_dt = if (n() > 1)
+                    delta_ch4 - predict(lm(delta_ch4 ~ year)) +
+                      mean(delta_ch4)
+                  else delta_ch4
+    ) |>
+    ungroup()
+  zone_se <- t8_dt |>
+    group_by(zone_name, month) |>
+    summarise(
+      delta_se = if (n() > 1) sd(delta_dt, na.rm = TRUE) / sqrt(n()) else NA_real_,
+      .groups = "drop"
+    )
+  t2 <- t2 |>
+    left_join(zone_se, by = c("zone_name" = "zone_name", "month" = "month")) |>
+    mutate(d_lo = delta_ch4 - delta_se,
+           d_hi = delta_ch4 + delta_se)
+  has_se <- TRUE
+} else {
+  message("⚠ T8 не найден (", t8_path, ") — рисуется без CI. ",
+          "Запустите gee/10c_t8_zonal_yearly.js, скачайте CSV и пересоберите.")
+  t2 <- t2 |> mutate(d_lo = NA_real_, d_hi = NA_real_)
+  has_se <- FALSE
+}
+
 # --- рисунок ----------------------------------------------------------------
 
 zone_colors_named <- setNames(zone_colors, unname(zone_ru))
@@ -72,7 +107,16 @@ zone_colors_light <- lighten_col(zone_colors_named, 0.55)
 
 fig5 <- ggplot(t2, aes(x = month, y = delta_ch4,
                          group  = zone_label)) +
-  geom_hline(yintercept = 0, colour = "black", linewidth = 0.3) +
+  geom_hline(yintercept = 0, colour = "black", linewidth = 0.3)
+
+# Узкие SE-ленты по зонам (только если T8 доступен)
+if (has_se) {
+  fig5 <- fig5 +
+    geom_ribbon(aes(ymin = d_lo, ymax = d_hi, fill = zone_label),
+                alpha = 0.20, colour = NA, show.legend = FALSE)
+}
+
+fig5 <- fig5 +
   geom_line(aes(colour = zone_label), linewidth = 0.8) +
   geom_point(aes(fill = zone_label,
                  colour = after_scale(lighten_col(fill, 0.55))),

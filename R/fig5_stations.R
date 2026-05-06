@@ -55,17 +55,42 @@ theme_article <- function(base_size = 10) {
 t7 <- read_csv(file.path(data_dir, "article_t7_stations_monthly.csv"),
                show_col_types = FALSE)
 
-season <- t7 |>
+# Детрендинг XCH4 для каждой станции внутри каждого месяца
+# (удаляем глобальный тренд роста CH4 при оценке межгодовой
+# вариабельности; для delta_ch4 детрендинг не нужен — тренд гасится).
+t7_dt <- t7 |>
+  group_by(station, month) |>
+  mutate(
+    n_yr      = n(),
+    sta_dt = if (n() > 1)
+                xch4_station - predict(lm(xch4_station ~ year)) +
+                  mean(xch4_station)
+              else xch4_station,
+    for_dt = if (n() > 1)
+                xch4_forest  - predict(lm(xch4_forest  ~ year)) +
+                  mean(xch4_forest)
+              else xch4_forest
+  ) |>
+  ungroup()
+
+season <- t7_dt |>
   group_by(station, month) |>
   summarise(
-    xch4_station = mean(xch4_station, na.rm = TRUE),
-    xch4_forest  = mean(xch4_forest,  na.rm = TRUE),
-    delta_ch4    = mean(delta_ch4,    na.rm = TRUE),
     n            = n(),
+    xch4_station = mean(xch4_station, na.rm = TRUE),
+    sta_se       = if (n() > 1) sd(sta_dt) / sqrt(n()) else 0,
+    xch4_forest  = mean(xch4_forest,  na.rm = TRUE),
+    for_se       = if (n() > 1) sd(for_dt) / sqrt(n()) else 0,
+    delta_ch4    = mean(delta_ch4,    na.rm = TRUE),
+    delta_se     = if (n() > 1) sd(delta_ch4) / sqrt(n()) else 0,
     .groups = "drop"
   ) |>
   mutate(station = factor(station_ru[station],
-                            levels = unname(station_ru)))
+                            levels = unname(station_ru)),
+         sta_lo  = xch4_station - sta_se,
+         sta_hi  = xch4_station + sta_se,
+         dlt_lo  = delta_ch4    - delta_se,
+         dlt_hi  = delta_ch4    + delta_se)
 
 # --- панель а: XCH₄ над станциями -------------------------------------------
 
@@ -73,6 +98,9 @@ station_colors_light <- lighten_col(station_colors, 0.55)
 
 fig6a <- ggplot(season, aes(x = month, y = xch4_station,
                              group = station)) +
+  # Узкие SE-ленты после детрендинга
+  geom_ribbon(aes(ymin = sta_lo, ymax = sta_hi, fill = station),
+              alpha = 0.22, colour = NA, show.legend = FALSE) +
   geom_line(aes(colour = station), linewidth = 0.9) +
   geom_point(aes(fill = station, shape = station,
                  colour = after_scale(lighten_col(fill, 0.55))),
@@ -103,6 +131,10 @@ fig6b <- ggplot(season, aes(x = month, y = delta_ch4, fill = station)) +
   geom_col(aes(colour = after_scale(lighten_col(fill, 0.55))),
            position = position_dodge(width = 0.8),
            width = 0.75, linewidth = 0.2) +
+  # SE error bars (ΔCH4 — без детрендинга, тренд гасится при вычитании)
+  geom_errorbar(aes(ymin = dlt_lo, ymax = dlt_hi),
+                position = position_dodge(width = 0.8),
+                width = 0.18, linewidth = 0.4, colour = "grey20") +
   geom_hline(yintercept = 0, colour = "black", linewidth = 0.3) +
   scale_fill_manual(NULL, values = station_colors) +
   scale_x_continuous(breaks = 5:10, labels = month_ru) +

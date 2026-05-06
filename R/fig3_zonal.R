@@ -58,10 +58,47 @@ t1 <- read_csv(file.path(data_dir, "article_t1_zonal_stats.csv"),
          zone_label   = factor(zone_ru[as.character(zone_name)],
                                 levels = unname(zone_ru)))
 
+# Межгодовая SE ΔCH₄ из T8 (если доступен — после запуска 10c_t8_zonal_yearly.js)
+t8_path <- file.path(data_dir, "article_t8_zonal_yearly_monthly.csv")
+if (file.exists(t8_path)) {
+  t8 <- read_csv(t8_path, show_col_types = FALSE)
+  # Среднее по тёплому сезону для каждой пары (зона × год) → 8 × 7 = 56 точек,
+  # затем SE по 7 годам внутри каждой зоны.
+  zone_se <- t8 |>
+    group_by(zone_name, year) |>
+    summarise(delta_warm = mean(delta_ch4, na.rm = TRUE), .groups = "drop") |>
+    group_by(zone_name) |>
+    summarise(
+      n_yr     = sum(!is.na(delta_warm)),
+      delta_se = if (n_yr > 1) sd(delta_warm, na.rm = TRUE) / sqrt(n_yr) else NA_real_,
+      .groups  = "drop"
+    )
+  t1 <- t1 |> left_join(zone_se, by = "zone_name") |>
+    mutate(
+      d_lo = delta_ch4_ppb - delta_se,
+      d_hi = delta_ch4_ppb + delta_se
+    )
+  has_se <- TRUE
+} else {
+  message("⚠ T8 не найден (", t8_path, ") — рисуется без CI. ",
+          "Запустите gee/10c_t8_zonal_yearly.js, скачайте CSV и пересоберите.")
+  t1 <- t1 |> mutate(d_lo = NA_real_, d_hi = NA_real_)
+  has_se <- FALSE
+}
+
 # --- панель а: столбчатая ΔCH₄ по зонам -------------------------------------
 
 fig4a <- ggplot(t1, aes(x = zone_label, y = delta_ch4_ppb, fill = zone_name)) +
-  geom_col(width = 0.7, colour = "black", linewidth = 0.3) +
+  geom_col(width = 0.7, colour = "black", linewidth = 0.3)
+
+# Усы ±SE (только если T8 доступен)
+if (has_se) {
+  fig4a <- fig4a +
+    geom_errorbar(aes(ymin = d_lo, ymax = d_hi),
+                  width = 0.18, linewidth = 0.4, colour = "grey20")
+}
+
+fig4a <- fig4a +
   geom_hline(yintercept = 0, colour = "black", linewidth = 0.3) +
   geom_text(aes(label = formatC(delta_ch4_ppb, format = "f", digits = 1, decimal.mark = ","),
                 vjust = ifelse(delta_ch4_ppb >= 0, -0.4, 1.2)),
