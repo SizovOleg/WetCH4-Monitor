@@ -153,8 +153,10 @@ fig6 <- fig6a + fig6b + plot_layout(widths = c(1, 1),
 
 ggsave(file.path(out_dir, "fig5_stations.png"), fig6,
        width = 17, height = 9, units = "cm", dpi = 400)
+ggsave(file.path(out_dir, "fig5_stations.svg"), fig6,
+       width = 17, height = 9, units = "cm")
 
-cat("✓ Рис. 5 сохранён в", out_dir, "\n")
+cat("✓ Рис. 5 сохранён в", out_dir, "(.png + .svg)\n")
 
 # --- средние по всем записям (для текста) -----------------------------------
 

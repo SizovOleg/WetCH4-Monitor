@@ -146,8 +146,10 @@ fig4 <- fig4a + fig4b + plot_layout(widths = c(1, 1.15))
 
 ggsave(file.path(out_dir, "fig3_zonal.png"), fig4,
        width = 18, height = 9, units = "cm", dpi = 400)
+ggsave(file.path(out_dir, "fig3_zonal.svg"), fig4,
+       width = 18, height = 9, units = "cm")
 
-cat("✓ Рис. 3 сохранён в", out_dir, "\n")
+cat("✓ Рис. 3 сохранён в", out_dir, "(.png + .svg)\n")
 
 # --- регрессия ΔCH₄ ~ заболоченность × температура --------------------------
 

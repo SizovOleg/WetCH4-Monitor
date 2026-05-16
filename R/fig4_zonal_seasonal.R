@@ -142,8 +142,10 @@ fig5 <- fig5 +
 
 ggsave(file.path(out_dir, "fig4_zonal_seasonal.png"), fig5,
        width = 16, height = 10, units = "cm", dpi = 400)
+ggsave(file.path(out_dir, "fig4_zonal_seasonal.svg"), fig5,
+       width = 16, height = 10, units = "cm")
 
-cat("✓ Рис. 4 сохранён в", out_dir, "\n")
+cat("✓ Рис. 4 сохранён в", out_dir, "(.png + .svg)\n")
 
 # --- пики по зонам (для обсуждения в тексте) --------------------------------
 
