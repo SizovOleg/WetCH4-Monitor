@@ -165,8 +165,10 @@ ggsave(file.path(out_dir, "fig2_seasonal.png"), fig3,
        width = 14, height = 13, units = "cm", dpi = 400)
 ggsave(file.path(out_dir, "fig2_seasonal.svg"), fig3,
        width = 14, height = 13, units = "cm")
+ggsave(file.path(out_dir, "fig2_seasonal.pdf"), fig3,
+       width = 14, height = 13, units = "cm", device = cairo_pdf)
 
-cat("✓ Рис. 2 сохранён в", out_dir, "(.png + .svg)\n")
+cat("✓ Рис. 2 сохранён в", out_dir, "(.png + .svg + .pdf)\n")
 cat("Сезонный ход (mean ± SE после детрендинга):\n")
 for (i in seq_len(nrow(season))) {
   cat(sprintf("  %s: болота %.1f±%.1f, фон %.1f±%.1f, Δ = %.1f±%.1f ppb\n",

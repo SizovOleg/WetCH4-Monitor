@@ -148,8 +148,10 @@ ggsave(file.path(out_dir, "fig3_zonal.png"), fig4,
        width = 18, height = 9, units = "cm", dpi = 400)
 ggsave(file.path(out_dir, "fig3_zonal.svg"), fig4,
        width = 18, height = 9, units = "cm")
+ggsave(file.path(out_dir, "fig3_zonal.pdf"), fig4,
+       width = 18, height = 9, units = "cm", device = cairo_pdf)
 
-cat("✓ Рис. 3 сохранён в", out_dir, "(.png + .svg)\n")
+cat("✓ Рис. 3 сохранён в", out_dir, "(.png + .svg + .pdf)\n")
 
 # --- регрессия ΔCH₄ ~ заболоченность × температура --------------------------
 

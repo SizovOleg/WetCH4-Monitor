@@ -155,8 +155,10 @@ ggsave(file.path(out_dir, "fig5_stations.png"), fig6,
        width = 17, height = 9, units = "cm", dpi = 400)
 ggsave(file.path(out_dir, "fig5_stations.svg"), fig6,
        width = 17, height = 9, units = "cm")
+ggsave(file.path(out_dir, "fig5_stations.pdf"), fig6,
+       width = 17, height = 9, units = "cm", device = cairo_pdf)
 
-cat("✓ Рис. 5 сохранён в", out_dir, "(.png + .svg)\n")
+cat("✓ Рис. 5 сохранён в", out_dir, "(.png + .svg + .pdf)\n")
 
 # --- средние по всем записям (для текста) -----------------------------------
 
