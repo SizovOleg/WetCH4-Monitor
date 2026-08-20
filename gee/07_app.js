@@ -28,7 +28,6 @@ var tropomiModule = require('users/ntcomz18_sand/wetch4_ws:gee/02_tropomi_monthl
 var ROOT = 'projects/nodal-thunder-481307-u1/assets/WetLandCH4/';
 
 var assetLandcover       = ee.Image(ROOT + 'wetland_mask');
-var assetDeltaJuly       = ee.Image(ROOT + 'delta_ch4_july_mean');
 var assetSeasonalMean    = ee.FeatureCollection(ROOT + 'seasonal_mean');
 var assetEnhancement     = ee.FeatureCollection(ROOT + 'enhancement_full');
 var assetZonalStats      = ee.FeatureCollection(ROOT + 'zonal_stats');
@@ -39,6 +38,61 @@ var assetStations        = ee.FeatureCollection(ROOT + 'stations');
 // charts 3-4 рисуются без интервалов (graceful fallback).
 var assetZonalSeasonalYr = ee.FeatureCollection(ROOT + 'zonal_seasonal_yearly');
 var WSP                  = c.WSP;
+
+// --- Каталог предвычисленных ΔCH₄-растров (Mode 1, тип "Seasonal mean") ---
+// Ключ '<month>_<coverage>'. Ассеты строит 12_delta_aug_sep_assets.js по той
+// же формуле, что и ветка on-the-fly в updateDeltaLayer: среднее по месяцу за
+// 2019–2025 минус forest background всей ЗСР, тот же grid 7 км. Подмена
+// численно эквивалентна, но не тратит интерактивную квоту EECU: экспорт
+// ассетов идёт по отдельной batch-квоте и делается один раз.
+// Нет ключа (Annual mean, Individual month) → расчёт on-the-fly, как раньше.
+var DELTA_ASSETS = {
+  '5_full':      ROOT + 'delta_ch4_may_full',
+  '5_wetlands':  ROOT + 'delta_ch4_may_wetlands',
+  '6_full':      ROOT + 'delta_ch4_jun_full',
+  '6_wetlands':  ROOT + 'delta_ch4_jun_wetlands',
+  '7_full':      ROOT + 'delta_ch4_jul_full',
+  '7_wetlands':  ROOT + 'delta_ch4_jul_wetlands',
+  '8_full':      ROOT + 'delta_ch4_aug_full',
+  '8_wetlands':  ROOT + 'delta_ch4_aug_wetlands',
+  '9_full':      ROOT + 'delta_ch4_sep_full',
+  '9_wetlands':  ROOT + 'delta_ch4_sep_wetlands',
+  '10_full':     ROOT + 'delta_ch4_oct_full',
+  '10_wetlands': ROOT + 'delta_ch4_oct_wetlands'
+};
+
+// undefined = не проверяли, true = ассет есть, false = нет → только on-the-fly
+var deltaAssetState = {};
+
+/**
+ * Разовая проверка наличия ассета, оптимистичная: слой уже нарисован из
+ * ассета, и только если его нет — помечаем ключ и перерисовываем on-the-fly.
+ * bandNames() читает метаданные, EECU практически не тратит.
+ * @param {string} key ключ в DELTA_ASSETS
+ */
+function probeDeltaAsset(key) {
+  if (deltaAssetState[key] !== undefined) { return; }
+  deltaAssetState[key] = true;
+  ee.Image(DELTA_ASSETS[key]).bandNames().evaluate(function(res, err) {
+    if (!err && res !== null && res !== undefined) { return; }   // ассет на месте
+
+    // Различаем «ассета нет» и «запрос не прошёл». Переключаться на on-the-fly
+    // из-за квоты или сетевого сбоя нельзя: он ДОРОЖЕ ассета, а не дешевле —
+    // это раскрутило бы исчерпание квоты вместо смягчения.
+    var msg = String(err || 'empty response');
+    if (/not found|does not exist|no such|unable to load/i.test(msg)) {
+      deltaAssetState[key] = false;
+      print('\u0394CH\u2084 asset missing: ' + DELTA_ASSETS[key] +
+            ' \u2014 falling back to on-the-fly. ' +
+            'Run 12_delta_aug_sep_assets.js to precompute it.');
+      updateDeltaLayer();
+      return;
+    }
+    deltaAssetState[key] = undefined;   // ретрай при следующем переключении
+    print('\u0394CH\u2084 asset probe failed (' + msg + ') \u2014 keeping the ' +
+          'precomputed path.');
+  });
+}
 
 // ============================================================
 // C. CGLS masks + TROPOMI monthly (для on-the-fly ΔCH₄)
@@ -51,6 +105,27 @@ var forestBinary = cgls.gte(111).and(cgls.lte(126)).clip(FULL_AOI);
 var monthlyAll = tropomiModule.buildMonthlyCollection(
   FULL_AOI, c.START_DATE, c.END_DATE
 ).map(function(img) { return ee.Image(img).clip(FULL_AOI); });
+
+// ============================================================
+// C2. Лимиты режима Custom AOI
+// ============================================================
+// App публичный, но вычисления Custom AOI идут с квоты EECU проекта-владельца
+// (earthengine.googleapis.com/daily_eecu_usage_time). Без ограничений один
+// посетитель, обведший пол-Сибири, выбирает дневной лимит на весь проект —
+// после чего падает и App, и любые задачи в Code Editor.
+
+/** Максимальная площадь пользовательского полигона, км². */
+var CUSTOM_MAX_AREA_KM2 = 100000;
+
+/** Максимум запусков Custom-анализа за одну сессию App. */
+var CUSTOM_MAX_RUNS = 10;
+
+/** Потолок пикселей в reduceRegion для Custom AOI: быстрый отказ вместо
+ *  долгого сжигания EECU на заведомо неподъёмном запросе. */
+var CUSTOM_MAX_PIXELS = 1e8;
+
+var customRunCount = 0;
+var customBusy = false;
 
 // ============================================================
 // D. Visualization params
@@ -195,7 +270,9 @@ var onboardingPanel = ui.Panel([
     color: TH.textDark, margin: '0 0 3px 0'}),
   ui.Label(
     '\u2460  Western Siberia \u2014 ready maps, charts and regional stats.\n' +
-    '\u2461  Custom AOI \u2014 draw a polygon, press Run, get \u0394CH\u2084 for your area.\n' +
+    '\u2461  Custom AOI \u2014 draw a polygon (\u2264 ' +
+      fmtArea(CUSTOM_MAX_AREA_KM2) + '), press Run,\n' +
+    '     get \u0394CH\u2084 for your area.\n' +
     '\u2462  Click any pixel on the map \u2014 see \u0394CH\u2084, land cover, natural\n' +
     '     zone and nearest station in the Info tab.',
     {fontSize: '11px', color: TH.textMuted, margin: '0', whiteSpace: 'pre'})
@@ -364,7 +441,15 @@ var wsSibControlsPanel = ui.Panel([
 
 // --- Mode 2 (Custom) controls ---
 var customStatus = ui.Label('Draw a polygon on the map, then press Run.',
-  {fontSize: '11px', color: TH.textMuted});
+  {fontSize: '11px', color: TH.textMuted, whiteSpace: 'pre'});
+
+// Лимиты показываем ДО запуска, а не в виде ошибки после
+var customLimitLabel = ui.Label(
+  '\u26A1 Limits: area \u2264 ' + fmtArea(CUSTOM_MAX_AREA_KM2) + ', ' +
+  CUSTOM_MAX_RUNS + ' runs per session.\n' +
+  'For the whole plain use "Western Siberia" \u2014 it is precomputed.',
+  {fontSize: '10px', color: TH.textMuted, margin: '2px 0 4px 0',
+   whiteSpace: 'pre'});
 
 var btnRun = ui.Button({
   label: '\u25B6 Run analysis',
@@ -381,7 +466,7 @@ var customChartsPanel = ui.Panel([], null,
 
 var customControlsPanel = ui.Panel([
   sectionLabel('Custom AOI'),
-  card([customStatus, btnRun, btnClear, customResultsPanel])
+  card([customStatus, customLimitLabel, btnRun, btnClear, customResultsPanel])
 ], null, {shown: false});
 
 // --- Disclaimer (компактный) ---
@@ -666,7 +751,21 @@ function updateDeltaLayer() {
   // Sanitize description для Export task name (без пробелов, unicode и т.п.)
   description = description.replace(/[^A-Za-z0-9_]/g, '_');
 
-  // Loading state
+  // --- Быстрый путь: готовый растр из ассета ------------------------------
+  // "Seasonal mean" численно совпадает с delta_ch4_<mon>_<coverage>, поэтому
+  // берём предвычисленное: ни TROPOMI-композита, ни reduceRegion по всей ЗСР.
+  var assetKey = (type === 'Seasonal mean')
+    ? monthSelect.getValue() + '_' + coverage
+    : null;
+  if (assetKey && DELTA_ASSETS[assetKey] &&
+      deltaAssetState[assetKey] !== false) {
+    probeDeltaAsset(assetKey);
+    applyDeltaLayer(ee.Image(DELTA_ASSETS[assetKey]),
+                    label, description, type, coverage);
+    return;
+  }
+
+  // --- Медленный путь: расчёт из сырого TROPOMI ---------------------------
   legendPeriodLabel.setValue('computing\u2026');
 
   var composite = filtered.mean().clip(FULL_AOI);
@@ -693,34 +792,45 @@ function updateDeltaLayer() {
       .subtract(ee.Image.constant(bgVal))
       .rename('delta_ch4').clip(FULL_AOI);
 
-    var deltaImg = (coverage === 'wetlands')
-      ? deltaBase.updateMask(wetlandBinary)
-      : deltaBase;
-
-    currentDelta = {img: deltaImg, label: label, description: description};
-
-    // Диапазон ΔCH₄ зависит от coverage И типа временного разреза.
-    //   wetlands → узкий -5..15 (фокус статьи)
-    //   full + Individual month → широкий -30..30 (большие колебания)
-    //   full + Seasonal/Annual mean → средний -15..15 (усреднение сжимает)
-    var rngKey;
-    if (coverage === 'wetlands') {
-      rngKey = 'wetlands';
-    } else if (type === 'Individual month') {
-      rngKey = 'full_monthly';
-    } else {
-      rngKey = 'full_aggregated';
-    }
-    var rng = DELTA_RANGES[rngKey];
-    L.delta.setVisParams({min: rng.min, max: rng.max,
-                          palette: palettes.DELTA_CH4_PALETTE});
-    updateLegendTicks(rng);
-
-    L.delta.setEeObject(deltaImg);
-    L.delta.setName('\u0394CH\u2084 \u2014 ' + label);
-    L.delta.setShown(true);
-    legendPeriodLabel.setValue(label);
+    applyDeltaLayer(
+      (coverage === 'wetlands') ? deltaBase.updateMask(wetlandBinary) : deltaBase,
+      label, description, type, coverage);
   });
+}
+
+/**
+ * Положить готовый ΔCH₄-образ на слой карты: шкала, легенда, подпись, Export.
+ * Общий хвост быстрого (ассет) и медленного (on-the-fly) путей.
+ * @param {!ee.Image} deltaImg однобандовый ΔCH₄ ('delta_ch4', ppb)
+ * @param {string} label подпись периода для легенды и имени слоя
+ * @param {string} description имя для Export-таски
+ * @param {string} type значение typeSelect
+ * @param {string} coverage 'wetlands' | 'full'
+ */
+function applyDeltaLayer(deltaImg, label, description, type, coverage) {
+  currentDelta = {img: deltaImg, label: label, description: description};
+
+  // Диапазон ΔCH₄ зависит от coverage И типа временного разреза.
+  //   wetlands → узкий -5..15 (фокус статьи)
+  //   full + Individual month → широкий -30..30 (большие колебания)
+  //   full + Seasonal/Annual mean → средний -15..15 (усреднение сжимает)
+  var rngKey;
+  if (coverage === 'wetlands') {
+    rngKey = 'wetlands';
+  } else if (type === 'Individual month') {
+    rngKey = 'full_monthly';
+  } else {
+    rngKey = 'full_aggregated';
+  }
+  var rng = DELTA_RANGES[rngKey];
+  L.delta.setVisParams({min: rng.min, max: rng.max,
+                        palette: palettes.DELTA_CH4_PALETTE});
+  updateLegendTicks(rng);
+
+  L.delta.setEeObject(deltaImg);
+  L.delta.setName('\u0394CH\u2084 \u2014 ' + label);
+  L.delta.setShown(true);
+  legendPeriodLabel.setValue(label);
 }
 
 // ============================================================
@@ -1014,16 +1124,90 @@ function loadWSiberiaCharts() {
 // J. Mode 2: Custom AOI (on-the-fly)
 // ============================================================
 
+/**
+ * Шаг сетки для оценки площади болот. На малых полигонах — native 100 м CGLS,
+ * на больших грубее, чтобы число пикселей в reduceRegion оставалось ~const.
+ * @param {number} areaKm2 площадь полигона, км²
+ * @return {number} scale в метрах
+ */
+function wetAreaScale(areaKm2) {
+  if (areaKm2 <= 5000)  return 100;
+  if (areaKm2 <= 25000) return 250;
+  return 500;
+}
+
+/**
+ * Блокирует кнопку Run на время счёта — иначе спам по кнопке запускает
+ * несколько параллельных пайплайнов с одной и той же квоты.
+ * @param {boolean} busy
+ */
+function setCustomBusy(busy) {
+  customBusy = busy;
+  btnRun.setDisabled(busy);
+}
+
+/**
+ * Gate режима Custom AOI: проверяет площадь полигона и счётчик запусков
+ * ДО того, как тратить EECU на сам анализ.
+ */
 function runCustomAnalysis() {
+  if (customBusy) {
+    customStatus.setValue('\u23F3 Analysis already running \u2014 please wait.');
+    customStatus.style().set('color', TH.textMuted);
+    return;
+  }
   var drawLayers = drawingTools.layers();
   if (drawLayers.length() === 0) {
     customStatus.setValue('\u26A0 Draw a polygon on the map first!');
     customStatus.style().set('color', TH.danger);
     return;
   }
+  if (customRunCount >= CUSTOM_MAX_RUNS) {
+    customStatus.setValue('\u26A0 Session limit reached (' + CUSTOM_MAX_RUNS +
+      ' runs).\nReload the page to run more.');
+    customStatus.style().set('color', TH.danger);
+    return;
+  }
+
   var customAOI = drawLayers.get(0).toGeometry();
+  setCustomBusy(true);
+  customStatus.setValue('\u23F3 Checking polygon size\u2026');
+  customStatus.style().set('color', TH.textMuted);
+
+  // maxError 1000 м — оценка площади копеечная по сравнению с самим анализом
+  customAOI.area(1000).evaluate(function(areaM2, err) {
+    if (err || areaM2 === null || areaM2 === undefined) {
+      customStatus.setValue('\u274C Could not measure the polygon. Redraw it.');
+      customStatus.style().set('color', TH.danger);
+      setCustomBusy(false);
+      return;
+    }
+    var areaKm2 = areaM2 / 1e6;
+    if (areaKm2 > CUSTOM_MAX_AREA_KM2) {
+      customStatus.setValue(
+        '\u26A0 Polygon too large: ' + fmtArea(areaKm2) + '\n' +
+        'Limit is ' + fmtArea(CUSTOM_MAX_AREA_KM2) + '. Draw a smaller area,\n' +
+        'or switch to "Western Siberia" for the whole plain.');
+      customStatus.style().set('color', TH.danger);
+      setCustomBusy(false);
+      return;
+    }
+    customRunCount++;
+    executeCustomAnalysis(customAOI, areaKm2);
+  });
+}
+
+/**
+ * Пайплайн Custom AOI. Вызывается только после прохождения лимитов
+ * в runCustomAnalysis — напрямую не дёргать.
+ * @param {!ee.Geometry} customAOI полигон пользователя
+ * @param {number} areaKm2 его площадь, км²
+ */
+function executeCustomAnalysis(customAOI, areaKm2) {
   mapPanel.centerObject(customAOI);
-  customStatus.setValue('\u23F3 Computing... (30\u201360 sec). Charts will appear in the Charts tab.');
+  customStatus.setValue('\u23F3 Computing ' + fmtArea(areaKm2) +
+    '\u2026 (30\u201360 sec)\nCharts will appear in the Charts tab. Run ' +
+    customRunCount + '/' + CUSTOM_MAX_RUNS + '.');
   customStatus.style().set('color', TH.textMuted);
   customResultsPanel.clear();
   customChartsPanel.clear();
@@ -1033,7 +1217,7 @@ function runCustomAnalysis() {
 
   var wetAreaNum = wetMask.multiply(ee.Image.pixelArea()).reduceRegion({
     reducer: ee.Reducer.sum(), geometry: customAOI,
-    scale: 100, maxPixels: 1e10, tileScale: 4
+    scale: wetAreaScale(areaKm2), maxPixels: CUSTOM_MAX_PIXELS, tileScale: 4
   }).values().get(0);
 
   var monthly = tropomiModule.buildMonthlyCollection(
@@ -1085,12 +1269,14 @@ function runCustomAnalysis() {
     wetArea: wetAreaNum,
     meanDelta: seasonalFC.aggregate_mean('delta_ch4')
   }).evaluate(function(d, err) {
+    setCustomBusy(false);
     if (err || !d) {
       customStatus.setValue('\u274C Error computing custom AOI');
       customStatus.style().set('color', TH.danger);
       return;
     }
-    customStatus.setValue('\u2705 Done!');
+    customStatus.setValue('\u2705 Done \u2014 ' + fmtArea(areaKm2) +
+      '. Run ' + customRunCount + '/' + CUSTOM_MAX_RUNS + '.');
     customStatus.style().set('color', TH.success);
 
     // Числа остаются в Overview (customResultsPanel), чтобы пользователь
@@ -1176,6 +1362,7 @@ cbBoundary.onChange(function(v) { if (L.boundary) L.boundary.setShown(v); });
 
 btnRun.onClick(runCustomAnalysis);
 btnClear.onClick(function() {
+  if (customBusy) { return; }
   drawingTools.layers().reset();
   customResultsPanel.clear();
   customChartsPanel.clear();

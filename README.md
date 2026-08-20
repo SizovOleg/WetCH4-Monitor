@@ -134,7 +134,8 @@ All map layers and chart data used by the app come from assets under
 `projects/nodal-thunder-481307-u1/assets/WetLandCH4/`. To rebuild from scratch:
 
 1. Open [code.earthengine.google.com](https://code.earthengine.google.com/)
-2. Load `gee/09_export_assets.js` and `gee/08_zonal_stats.js`
+2. Load `gee/09_export_assets.js`, `gee/08_zonal_stats.js` and
+   `gee/12_delta_aug_sep_assets.js`
 3. Hit **Run** in each — exports go to the Tasks tab, run them all
 4. Wait for completion (30-60 min depending on region size)
 5. Share the folder publicly
@@ -144,15 +145,38 @@ All map layers and chart data used by the app come from assets under
 
 Asset catalogue produced by these scripts:
 
-| Asset                | Type              | Records | Source                |
-|----------------------|-------------------|---------|-----------------------|
-| `wetland_mask`       | Image (4-class)   | raster  | `09_export_assets.js` |
-| `delta_ch4_july_mean`| Image             | raster  | `09_export_assets.js` |
-| `enhancement_full`   | FeatureCollection | 42      | `09_export_assets.js` |
-| `seasonal_mean`      | FeatureCollection | 6       | `09_export_assets.js` |
-| `zonal_stats`        | FeatureCollection | 8       | `09_export_assets.js` |
-| `zonal_seasonal`     | FeatureCollection | 48      | `08_zonal_stats.js`   |
-| `stations`           | FeatureCollection | 3       | `09_export_assets.js` |
+| Asset                          | Type              | Records | Source                       |
+|--------------------------------|-------------------|---------|------------------------------|
+| `wetland_mask`                 | Image (4-class)   | raster  | `09_export_assets.js`        |
+| `delta_ch4_<mon>_full`          | Image × 6         | raster  | `12_delta_aug_sep_assets.js` |
+| `delta_ch4_<mon>_wetlands`      | Image × 6         | raster  | `12_delta_aug_sep_assets.js` |
+| `delta_ch4_july_mean`          | Image             | raster  | `09_export_assets.js`        |
+| `enhancement_full`             | FeatureCollection | 42      | `09_export_assets.js`        |
+| `seasonal_mean`                | FeatureCollection | 6       | `09_export_assets.js`        |
+| `zonal_stats`                  | FeatureCollection | 8       | `09_export_assets.js`        |
+| `zonal_seasonal`               | FeatureCollection | 48      | `08_zonal_stats.js`          |
+| `stations`                     | FeatureCollection | 3       | `09_export_assets.js`        |
+
+`<mon>` is one of `may jun jul aug sep oct`. These twelve rasters are what the
+app's **Western Siberia** mode serves for the *Seasonal mean* slice — reading
+them costs no interactive compute at all. `delta_ch4_july_mean` predates them
+and duplicates `delta_ch4_jul_full`; it is kept only so older figure scripts
+keep resolving.
+
+### Compute quota
+
+The app runs on the owner's Earth Engine project, so **every visitor spends the
+owner's `daily_eecu_usage_time`**. Two things keep that bounded:
+
+* *Western Siberia* mode reads the precomputed rasters above. Slices without an
+  asset (*Annual mean*, *Individual month*) still compute on the fly.
+* *Custom AOI* mode is capped: polygons up to 100,000 km², 10 runs per session,
+  and the grid step for the wetland-area reducer scales with polygon size. The
+  limits live in one block near the top of `gee/07_app.js`
+  (`CUSTOM_MAX_AREA_KM2`, `CUSTOM_MAX_RUNS`, `CUSTOM_MAX_PIXELS`).
+
+Asset exports run on the separate *batch* EECU quota, so rebuilding the
+catalogue never eats into what the live app needs.
 
 ---
 

@@ -1,18 +1,27 @@
 /**
- * @fileoverview Создание 6 assets ΔCH₄ для рисунков: июль, август, сентябрь.
+ * @fileoverview Создание assets ΔCH₄ на весь сезон май–октябрь.
  * Каждый месяц в двух версиях: full (вся ЗСР) и wetlands (только болота).
+ * Имя файла историческое: изначально скрипт покрывал только jul/aug/sep.
+ *
+ * Зачем: режим "Western Siberia" в App (07_app.js, тип "Seasonal mean")
+ * читает эти растры напрямую вместо расчёта из сырого TROPOMI. Экспорт идёт
+ * по batch-квоте EECU и делается один раз, а App после этого не тратит
+ * интерактивную квоту вообще. Без этих ассетов App честно падает обратно
+ * на on-the-fly — работает, но жжёт квоту у каждого посетителя.
  *
  * ПРЕДВАРИТЕЛЬНО (вручную):
  *   Assets → New → Folder → имя "WetLandCH4"
  *   (папка должна существовать до Run All)
  *
- * Результат (6 assets):
- *   WetLandCH4/delta_ch4_jul_full       — вся ЗСР, float, ppb
- *   WetLandCH4/delta_ch4_jul_wetlands   — только болота, float, ppb
- *   WetLandCH4/delta_ch4_aug_full
- *   WetLandCH4/delta_ch4_aug_wetlands
+ * Результат (12 assets, по 2 на месяц):
+ *   WetLandCH4/delta_ch4_may_full       — вся ЗСР, float, ppb
+ *   WetLandCH4/delta_ch4_may_wetlands   — только болота, float, ppb
+ *   WetLandCH4/delta_ch4_jun_full  … _wetlands
+ *   WetLandCH4/delta_ch4_jul_full  … _wetlands
+ *   WetLandCH4/delta_ch4_aug_full  … _wetlands
  *   WetLandCH4/delta_ch4_sep_full       — ← этот используется для Рис. 2
  *   WetLandCH4/delta_ch4_sep_wetlands
+ *   WetLandCH4/delta_ch4_oct_full  … _wetlands
  *
  * Методика (идентично Module 06):
  *   monthly_mean(M)  = avg(monthlyAll, month=M) за 2019–2025
@@ -128,12 +137,17 @@ function exportMonth(month, shortName) {
 }
 
 // ============================================================
-// Все три месяца
+// Весь сезон эмиссии: май–октябрь
 // ============================================================
 
-var jul = exportMonth(7, 'jul');
-var aug = exportMonth(8, 'aug');
-var sep = exportMonth(9, 'sep');
+// Короткие имена месяцев — часть asset id, менять нельзя без правки
+// каталога DELTA_ASSETS в 07_app.js.
+var MONTHS = [
+  {n: 5,  s: 'may'}, {n: 6,  s: 'jun'}, {n: 7,  s: 'jul'},
+  {n: 8,  s: 'aug'}, {n: 9,  s: 'sep'}, {n: 10, s: 'oct'}
+];
+
+var results = MONTHS.map(function(m) { return exportMonth(m.n, m.s); });
 
 // ============================================================
 // Preview
@@ -148,16 +162,18 @@ var vis = {
   palette: ['#2166ac','#67a9cf','#d1e5f0','#f7f7f7','#fddbc7','#ef8a62','#b2182b']
 };
 
-Map.addLayer(jul.full, vis, 'ΔCH₄ Jul full', false);
-Map.addLayer(jul.wetlands, vis, 'ΔCH₄ Jul wetlands', false);
-Map.addLayer(aug.full, vis, 'ΔCH₄ Aug full', false);
-Map.addLayer(aug.wetlands, vis, 'ΔCH₄ Aug wetlands', false);
-Map.addLayer(sep.full, vis, 'ΔCH₄ Sep full', true);   // ← показать по умолчанию
-Map.addLayer(sep.wetlands, vis, 'ΔCH₄ Sep wetlands', false);
+MONTHS.forEach(function(m, i) {
+  var name = m.s.charAt(0).toUpperCase() + m.s.slice(1);
+  // По умолчанию показываем только сентябрь full — он идёт в Рис. 2
+  Map.addLayer(results[i].full, vis, 'ΔCH₄ ' + name + ' full', m.n === 9);
+  Map.addLayer(results[i].wetlands, vis, 'ΔCH₄ ' + name + ' wetlands', false);
+});
 
 // ============================================================
-print('═══ 6 assets ΔCH₄ (jul/aug/sep × full/wetlands) ═══');
+print('═══ 12 assets ΔCH₄ (may–oct × full/wetlands) ═══');
 print('ПЕРЕД Run: убедись что папка WetLandCH4 создана в Assets.');
-print('Run All 6 задач. Время: ~3–5 мин каждая.');
+print('Run All 12 задач. Время: ~3–5 мин каждая, идут по batch-квоте EECU');
+print('(отдельной от интерактивной, которую тратит App).');
 print('');
 print('Для Рис. 2 (ArcGIS) использовать: WetLandCH4/delta_ch4_sep_full');
+print('После прогона App перестаёт считать Seasonal mean on-the-fly.');
