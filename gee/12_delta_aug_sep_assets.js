@@ -174,6 +174,8 @@ print('═══ 12 assets ΔCH₄ (may–oct × full/wetlands) ═══');
 print('ПЕРЕД Run: убедись что папка WetLandCH4 создана в Assets.');
 print('Run All 12 задач. Время: ~3–5 мин каждая, идут по batch-квоте EECU');
 print('(отдельной от интерактивной, которую тратит App).');
+print('Существующий ассет Export НЕ перезапишет — задача упадёт с');
+print('"Cannot overwrite asset". Чтобы пересчитать месяц, сначала удали старый.');
 print('');
 print('Для Рис. 2 (ArcGIS) использовать: WetLandCH4/delta_ch4_sep_full');
 print('После прогона App перестаёт считать Seasonal mean on-the-fly.');
